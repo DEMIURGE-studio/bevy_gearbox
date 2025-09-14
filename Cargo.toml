@@ -18,4 +18,3 @@ bevy_gearbox_macros = "0.3.0"
 bevy = { version = "0.16.1", features = ["default"] }
 bevy-inspector-egui = "0.32.0"
 bevy_egui = "0.35.1"
-bevy_gearbox_editor = { path = "../bevy_gearbox_editor" }

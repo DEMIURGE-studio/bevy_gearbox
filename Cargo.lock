@@ -702,34 +702,19 @@ dependencies = [
 
 [[package]]
 name = "bevy_gearbox"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
- "bevy_gearbox_editor",
  "bevy_gearbox_macros",
-]
-
-[[package]]
-name = "bevy_gearbox_editor"
-version = "0.3.3"
-dependencies = [
- "bevy",
- "bevy-inspector-egui",
- "bevy_asset",
- "bevy_ecs",
- "bevy_egui",
- "bevy_gearbox",
- "bevy_reflect",
- "disqualified",
- "egui",
- "smallvec",
 ]
 
 [[package]]
 name = "bevy_gearbox_macros"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4c08359de13a904514d6da51ca8f15a2af00cef636ff4aae4fbfee42893ee88"
 dependencies = [
  "proc-macro2",
  "quote",

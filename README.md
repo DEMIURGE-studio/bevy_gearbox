@@ -56,8 +56,8 @@ commands.trigger_targets(YourEvent, machine_root);
 
 | Crate               | Version | Bevy |
 |---------------------|---------|------|
-| bevy_gearbox        | 0.3.3   | 0.16 |
-| bevy_gearbox_editor | 0.3.3   | 0.16 |
+| bevy_gearbox        | 0.3.4   | 0.16 |
+| bevy_gearbox_editor | 0.3.4   | 0.16 |
 
 ## License
 

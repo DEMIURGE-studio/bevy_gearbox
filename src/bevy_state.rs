@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::state::FreelyMutableState};
+use bevy::{prelude::*, state::state::*};
 use crate::{EnterState, StateMachine};
 
 /// Bridge a Gearbox chart's EnterState events to Bevy `States`,

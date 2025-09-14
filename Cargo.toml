@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "State machine system for the bevy game engine"
 license = "MIT OR Apache-2.0"
@@ -12,7 +12,7 @@ categories = ["game-development", "game-engines"]
 
 [dependencies]
 bevy = { version = "0.16.1", default-features = false, features = ["std"] }
-bevy_gearbox_macros = { path = "../bevy_gearbox_macros", version = "0.3.0" }
+bevy_gearbox_macros = "0.3.0"
 
 [dev-dependencies]
 bevy = { version = "0.16.1", features = ["default"] }

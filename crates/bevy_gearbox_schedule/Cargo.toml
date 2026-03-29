@@ -1,0 +1,29 @@
+[package]
+name = "bevy_gearbox_schedule"
+version = "0.1.0"
+edition = "2021"
+description = "Experimental: schedule-based state machine resolution for bevy_gearbox"
+
+[lib]
+name = "bevy_gearbox_schedule"
+path = "src/lib.rs"
+
+[dependencies]
+bevy = { version = "0.18", default-features = false, features = ["bevy_state", "bevy_log"] }
+inventory = "0.3"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = []
+trace_tracy = ["bevy/trace_tracy"]
+debug = ["bevy/debug"]
+
+[[bench]]
+name = "schedule_bench"
+harness = false
+
+[[example]]
+name = "schedule_stress"
+path = "examples/schedule_stress.rs"

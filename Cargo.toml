@@ -20,12 +20,14 @@ members = [
   "crates/bevy_gearbox_editor",
   "crates/bevy_gearbox_macros", 
   "crates/bevy_gearbox_protocol",
+  "crates/bevy_gearbox_schedule",
 ]
 resolver = "3"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_state"] }
 bevy_gearbox_core = { version = "0.5.1", path = "./crates/bevy_gearbox_core" }
+bevy_gearbox_schedule = { version = "0.1.0", path = "./crates/bevy_gearbox_schedule" }
 bevy_gearbox_protocol = { version = "0.5", path = "./crates/bevy_gearbox_protocol", features = ["server"], optional = true }
 inventory = "0.3.21"
 rustversion = "1"
@@ -33,14 +35,21 @@ rustversion = "1"
 [dev-dependencies]
 bevy = "0.18"
 bevy_gearbox_protocol = { version = "0.5", path = "./crates/bevy_gearbox_protocol", features = ["server"] }
+criterion = "0.5"
 
 [features]
 default = ["server"]
 protocol = ["dep:bevy_gearbox_protocol"]
 server = ["protocol", "bevy_gearbox_protocol/server"]
+trace_tracy = ["bevy/trace_tracy"]
+debug = ["bevy/debug"]
 
 [build-dependencies]
 rustc_version = "0.4"
+
+[[bench]]
+name = "observer_bench"
+harness = false
 
 [[example]]
 name = "repeater"
@@ -61,3 +70,7 @@ required-features = ["server"]
 name = "app_state"
 path = "examples/app_state.rs"
 required-features = ["server"]
+
+[[example]]
+name = "observer_stress"
+path = "examples/observer_stress.rs"

@@ -20,7 +20,7 @@ bevy = { version = "0.18", default-features = false, features = [
     "bevy_winit",
 ] }
 bevy_egui = "0.39"
-bevy_gearbox_protocol = { version = "0.5", path = "../bevy_gearbox_protocol", features = ["server"] }
+bevy_gearbox_protocol = { version = "0.5", path = "../protocol", features = ["server"] }
 hex = "0.4.3"
 rfd = "0.15.4"
 ron = "0.11.0"

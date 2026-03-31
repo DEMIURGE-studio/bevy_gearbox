@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-**Gearbox** is state machine/chart library for the [Bevy](https://bevyengine.org/) game engine.
+**Gearbox** is a state machine/chart library for the [Bevy](https://bevyengine.org/) game engine.
 
 [![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](#license)
 [![crates.io](https://img.shields.io/crates/v/bevy_gearbox?label=crates.io)](https://crates.io/crates/bevy_gearbox)
@@ -14,234 +14,130 @@
 
 ---
 
-## Design
+## Why gearbox
 
-- **ECS driven.** States and transitions are simple entities, react to changes via observers. If you know bevy, you know gearbox.
-- **Ergonomic API.** Focus on your logic, not in learning a new library.
-- **Data driven.** Easily manage state machines as assets if you want to.
-- **[Visual Editor.](https://github.com/DEMIURGE-studio/bevy_gearbox_editor)** (optional) Easily build, edit and monitor your state machines.
+State machines are useful everywhere in games - AI behavior, ability lifecycles, UI flows, animation controllers. But state machines in an ECS are a hard problem. Gearbox solves this by representing state machines as regular entity hierarchies. States are entities. Transitions are entities. Everything lives in the ECS and plays by its rules.
+
+- **Pure ECS.** States and transitions are entities with components. Query for active states with `With<MyComponent>`. No new paradigms.
+- **Fully parallelizable.** All transition resolution runs through a parallelized schedule. Thousands of machines per frame.
+- **Message-driven.** Trigger transitions by writing Bevy messages. Attach side effects that automatically produce downstream messages when transitions fire.
+- **Data-driven.** State machines are entity hierarchies. Spawn them from scenes, build them from assets, edit them at runtime.
+- **Visual Editor** (optional). Build, edit, and monitor state machines while your game runs.
 
 <p align="center">
   <img width="600" src="assets/editor_demo.webp">
 </p>
 
-The goal of gearbox is simple. You should be able to interact with it exactly like you interact with anything else in bevy.
-Building a state machine is as simple as spawning entities.
-Querying for entities in a particular state is as simple as adding a `With<ExampleComponent>` to the end of a query.
-Reacting to a transition between two states with just `On<EnterState>` in the observer.
-
-## Table of Contents
-
-<details>
-<summary>Click to expand</summary>
-
-- [Getting Started](<#Getting started>)
-- [Features](#Features)
-  - [State Machines](<#State Machines>)
-  - [State Charts](<#State Charts (Nested state machines)>)
-  - [States](#States)
-  - [Transitions](#Transitions)
-  - [Triggering transitions](<#Triggering transitions>)
-  - [Transition-triggered events](<#Transition-triggered events>)
-  - [Statemachine-wide systems](<#Statemachine-wide systems>)
-- [Your first State Machine/Chart](<#Your first State Machine/Chart>)
-- [Using the editor (optional)](<#Using the editor (optional)>)
-  - [Installing the editor](<#Installing the editor>)
-  - [Creating an state machine in the editor](<#Creating an state machine in the editor>)
-- [Future goals](<#Future goals>)
-- [Potential Footgun](<#POTENTIAL FOOTGUN>)
-- [Version Table](<#Version Table>)
-- [Contributing](#Contributing)
-- [License](#License)
-
-</details>
-
 ## Getting started
-
-1. Run `cargo add bevy_gearbox`
-2. Add `GearboxPlugin` to your app:
 
 ```rust
 use bevy::prelude::*;
 use bevy_gearbox::GearboxPlugin;
 
 fn main() {
-    let mut app = App::new();
+    App::new()
+        .add_plugins((DefaultPlugins, GearboxPlugin))
+        .run();
+}
+```
 
-    app.add_plugins((
-        DefaultPlugins,
-        GearboxPlugin,
-    ));
+## Building a state machine
 
-    app.run();
+```rust
+// States are entities
+let ready = commands.spawn_substate(machine, Name::new("Ready")).id();
+let active = commands.spawn_substate(machine, Name::new("Active")).id();
+
+// Transitions are entities
+commands.spawn((Source(active), Target(ready), AlwaysEdge));
+
+// ...with helpers to save boilerplate
+commands.spawn_transition::<Activate>(ready, active);
+
+// Initialize the machine
+commands.entity(machine).init_state_machine(ready);
+```
+
+### Triggering transitions
+
+```rust
+// Define a message
+#[derive(Message, Clone)]
+struct Activate { machine: Entity }
+
+impl GearboxMessage for Activate {
+    type Validator = AcceptAll;
+    fn machine(&self) -> Entity { self.machine }
+}
+
+// Write it from any system
+fn input_system(mut writer: MessageWriter<Activate>) {
+    writer.write(Activate { machine: my_entity });
+}
+```
+
+### State components
+
+Automatically insert/remove components on the machine root based on which state is active:
+
+```rust
+commands.spawn((
+    SubstateOf(machine),
+    StateComponent(Walking),
+));
+// Walking component appears on the machine entity when this state is active
+```
+
+### Reacting to state changes
+
+```rust
+fn on_enter(q_entered: Query<(Entity, &Active), Added<Active>>) {
+    for (state, active) in &q_entered {
+        // `state` was just entered, `active.machine` is the state machine root
+    }
+}
+
+fn on_exit(mut removed: RemovedComponents<Active>) {
+    for state in removed.read() {
+        // `state` was just exited
+    }
 }
 ```
 
 ## Features
 
-### State Machines
-
-```rust
-commands.spawn((
-  Name::new("My State Machine"),
-  InitialState(ready),
-  StateMachine::new(),
-));
-```
-
-### States
-
-```rust
-commands.spawn((
-  Name::new("Ready"),
-  SubstateOf(my_state_machine),
-));
-commands.spawn((
-  Name::new("NotReady"),
-  SubstateOf(my_state_machine),
-));
-```
-
-### Transitions
-
-```rust
-#[derive(SimpleTransition, EntityEvent, Clone)]
-struct SetNotReady(Entity);
-commands.spawn((
-  Name::new("Ready -> Not Ready"),
-  Source(ready),
-  Target(not_ready),
-  EventEdge::<SetNotReady>::default(),
-));
-
-#[derive(SimpleTransition, EntityEvent, Clone)]
-struct SetReady(Entity);
-commands.spawn((
-  Name::new("Not Ready -> Ready"),
-  Source(not_ready),
-  Target(ready),
-  EventEdge::<SetReady>::default(),
-));
-```
-
-You can alternatively skip `SimpleTransition` and manually implement `TransitionEvent`, then add `#[transition_event]` to the type (make sure `use bevy_gearbox::prelude::*;` is in scope). Either path participates in inventory-based auto-registration: you don't need to call any explicit app registration for transition events.
-
-### Triggering transitions
-
-```rust
-  // "My State Machine" is Ready
-  commands.entity(p).trigger(SetNotReady)
-  // "My State Machine" is NotReady
-```
-
-### Transition-triggered events
-
-```rust
-commands
-    .entity(not_ready)
-    .observe(on_enter_not_ready);
-
-fn on_enter_not_ready(
-    on: On<EnterState>,
-    entities: Query<Entity, With<NotReady>>,
-) {
-    let Ok(on.state_machine) = entities.get(on.state_machine) else {
-      return
-    };
-
-    info!("Entered NotReady state!");
-}
-```
-
-### Statemachine-wide systems
-
-```rust
-fn count_ready_entities(
-    entities: Query<Entity, With<Ready>>,
-) {
-    info!(ready_count = entities.iter().count());
-}
-```
-
-## Your first State Machine/Chart
-
-Inside [DOCS.md](DOCS.md) you'll find an in-depth step by step guide into everything you need to build your first
-State Machine, interact with it through the ECS, and explanations for every how different parts of the API can be used.
-States and transitions in gearbox are all just entities. Therefore, if you know how use bevy, you know how to use gearbox.
-
-<!-- TODO: Maybe move this section and everything regarding to the
-editor into the editor repository and link to it.-->
-
-## Using the editor (optional)
-
-### Installing the editor
-
-1. Run `cargo add bevy_gearbox --features server`
-2. Add the server plugin to your app
-
-```rust
-use bevy::prelude::*;
-use bevy_gearbox::GearboxPlugin;
-
-fn main() {
-    let mut app = App::new();
-
-    app.add_plugins((
-        DefaultPlugins,
-        GearboxPlugin,
-        bevy_gearbox::server::ServerPlugin::default(),
-    ));
-
-    app.run();
-}
-```
-
-3. Run your app `cargo run`
-4. Launch the editor as a separate process and connect to your running app (see the [editor](https://crates.io/crates/bevy_gearbox) for launch instructions).
-
-### Creating an state machine in the editor
-
-Coming soon.
-
-## Future goals
-
-- Improve usability and erogonomics  
-  Through user experimentation new edgecases and api ergonomic gotchas are bound to be discovered and improved.
-- Integrate with `bsn!` and `Scenes V2`  
-  This will make defining state machines in code much more powerful, and the entity patching will massively improve usability of statemachine scene assets. Fingers crossed for 0.19!
-- Make the editor completely standalone through [BRP](https://docs.rs/bevy/0.17.2/bevy/remote) (Bevy Remote Protocol).
+- Hierarchical states (nested state machines / statecharts)
+- Parallel regions
+- Shallow and deep history
+- Guarded transitions with string-based guard sets
+- Delayed transitions (timer-based)
+- Always-edges (automatic transitions when conditions are met)
+- Parameter-driven guards (float/int/bool ranges with hysteresis)
+- Side effects (message-in, message-out on transition)
+- State components (auto insert/remove on enter/exit)
+- Reset edges (clear subtree state on transition)
+- Internal vs external transitions
 
 > [!WARNING]
 >
-> # POTENTIAL FOOTGUN
->
-> When manually building state machines through commands it is important to add the StateMachine component to your root last.
-> This initializes the machine, and if you don't add the StateMachine to the root after you've added all your InitialState
-> components to other state entities, it will not initialize correctly. The proper "layout" for building statechart entities
-> is demonstrated in the repeater example. This is not a problem if you use a scene to spawn your statechart.
-> You can author statechart scenes using the [editor](https://github.com/DEMIURGE-studio/bevy_gearbox_editor).
-> In the future this will be solved by building state machines through bsn.
->
-> **TLDR:** Insert the StateMachine component after the rest of the state machine has been built.
+> When building state machines through commands, add the `StateMachine` component **last**.
+> This initializes the machine, and if the hierarchy isn't fully built yet, initialization
+> will be incomplete. This is not a problem when spawning from scenes.
 
 ## Version Table
 
 | Bevy | Gearbox |
 | ---- | ------- |
-| 0.18 | 0.5.2   |
+| 0.18 | 0.6     |
+| 0.18 | 0.5     |
 | 0.17 | 0.4     |
 
 ## Contributing
 
-Feel free to open issues or create pull requests, if you encounter any problems.
+Feel free to open issues or create pull requests if you encounter any problems.
 
 Ask us on the [Bevy Discord](https://discord.com/invite/bevy) server's [Gearbox topic](https://discord.com/channels/691052431525675048/1379511828949762048) in `#ecosystem-crates` for larger changes or other things if you feel like so!
 
 ## License
 
-Bevy gearbox is free and open source. All code in this repository is dual-licensed under either:
-
-- MIT License ([LICENSE-MIT](/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-- Apache License, Version 2.0 ([LICENSE-APACHE](/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-
-at your option.
+Dual-licensed under MIT ([LICENSE-MIT](/LICENSE-MIT)) or Apache 2.0 ([LICENSE-APACHE](/LICENSE-APACHE)).

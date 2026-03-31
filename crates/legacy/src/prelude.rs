@@ -51,10 +51,10 @@ pub use crate::{
     SimpleTransition,
 };
 
-pub use bevy_gearbox_macros::transition_event;
-pub use bevy_gearbox_macros::state_component;
-pub use bevy_gearbox_macros::state_bridge;
-pub use bevy_gearbox_macros::gearbox_param;
+pub use bevy_gearbox_legacy_macros::transition_event;
+pub use bevy_gearbox_legacy_macros::state_component;
+pub use bevy_gearbox_legacy_macros::state_bridge;
+pub use bevy_gearbox_legacy_macros::gearbox_param;
 
 pub use crate::parameter::{
     // Parameter components

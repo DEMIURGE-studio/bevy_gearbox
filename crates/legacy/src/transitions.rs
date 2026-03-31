@@ -135,7 +135,7 @@ impl Default for NoEvent {
 }
 
 /// Derive macro for simple events that don't need phase-specific payloads
-pub use bevy_gearbox_macros::SimpleTransition;
+pub use bevy_gearbox_legacy_macros::SimpleTransition;
 
 fn cleanup_edge_timer_and_pending<E: EntityEvent + Clone + 'static>(
     commands: &mut Commands,

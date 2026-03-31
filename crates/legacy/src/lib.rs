@@ -6,10 +6,10 @@ use bevy::platform::collections::HashSet;
 // Re-exports
 use crate::{guards::Guards, history::{History, HistoryState}};
 pub use registration::RegistrationAppExt;
-pub use bevy_gearbox_macros::SimpleTransition;
-pub use bevy_gearbox_macros::transition_event;
-pub use bevy_gearbox_macros::state_component;
-pub use bevy_gearbox_macros::state_bridge;
+pub use bevy_gearbox_legacy_macros::SimpleTransition;
+pub use bevy_gearbox_legacy_macros::transition_event;
+pub use bevy_gearbox_legacy_macros::state_component;
+pub use bevy_gearbox_legacy_macros::state_bridge;
 pub use transitions::{TransitionEvent, NoEvent, AcceptAll};
 pub use inventory;
 

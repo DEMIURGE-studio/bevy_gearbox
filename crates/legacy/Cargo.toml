@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_state"] }
-bevy_gearbox_macros = { version = "0.4.0", path = "../bevy_gearbox_macros" }
+bevy_gearbox_legacy_macros = { version = "0.4.0", path = "../legacy_macros" }
 inventory = "0.3.21"
 rustversion = "1"
 

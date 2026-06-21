@@ -24,16 +24,16 @@
 //!
 //! This is analogous to how Avian runs a physics schedule multiple times per frame.
 
-pub mod components;
-pub mod history;
-pub mod state_component;
-pub mod resolve;
-pub mod messages;
-pub mod delay;
 pub mod commands;
-pub mod registration;
-pub mod prelude;
+pub mod components;
+pub mod delay;
 pub mod helpers;
+pub mod history;
+pub mod messages;
+pub mod prelude;
+pub mod registration;
+pub mod resolve;
+pub mod state_component;
 
 #[cfg(feature = "gauge")]
 pub mod gauge;
@@ -49,39 +49,32 @@ use resolve::PendingCount;
 // Re-exports — preserve original public API
 // ---------------------------------------------------------------------------
 
+// Re-export `inventory` so the attribute macros can submit registrations
+#[doc(hidden)]
+pub use inventory;
+
+pub use commands::{
+    BuildEntityEvent, BuildTransition, GearboxCommandsExt, InitStateMachine, SpawnSubstate,
+    SpawnTransition, TransitionBuilder, TransitionExt,
+};
 pub use components::{
-    Active, TerminalState,
-    StateMachine, InitialState, SubstateOf, Substates, Source, Transitions, Target,
-    AlwaysEdge, EdgeKind, Delay, EdgeTimer,
-    ResetEdge, ResetScope,
+    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InitialState, ResetEdge, ResetScope, Source,
+    StateMachine, SubstateOf, Substates, Target, TerminalState, Transitions,
 };
 pub use history::{History, HistoryState};
-pub use state_component::{
-    StateComponent, StateInactiveComponent,
-    state_component_enter, state_component_exit,
-    state_inactive_component_enter, state_inactive_component_exit,
-};
-pub use resolve::{
-    TransitionMessage, BlockedEdges,
-    EnterState, ExitState,
-};
 pub use messages::{
-    GearboxMessage, MessageValidator, AcceptAll, MessageEdge, Matched,
-    message_edge_listener,
-    Done, emit_terminal_done,
-};
-pub use commands::{
-    SpawnSubstate, SpawnTransition, BuildTransition, TransitionBuilder,
-    TransitionExt, InitStateMachine,
-    GearboxCommandsExt, BuildEntityEvent,
+    emit_terminal_done, message_edge_listener, AcceptAll, Done, GearboxMessage, Matched,
+    MessageEdge, MessageValidator,
 };
 pub use registration::{
-    InstalledTransitions, InstalledStateComponents,
-    InstalledStateBridges,
-    RegistrationAppExt, gearbox_auto_register_plugin,
-    TransitionInstaller, StateInstaller,
-    StateBridgeInstaller,
-    DeferEvent, replay_deferred_messages, bridge_to_bevy_state,
+    bridge_to_bevy_state, gearbox_auto_register_plugin, replay_deferred_messages, DeferEvent,
+    InstalledStateBridges, InstalledStateComponents, InstalledTransitions, RegistrationAppExt,
+    StateBridgeInstaller, StateInstaller, TransitionInstaller,
+};
+pub use resolve::{BlockedEdges, EnterState, ExitState, TransitionMessage};
+pub use state_component::{
+    state_component_enter, state_component_exit, state_inactive_component_enter,
+    state_inactive_component_exit, StateComponent, StateInactiveComponent,
 };
 
 // ---------------------------------------------------------------------------
@@ -230,18 +223,15 @@ fn activate_added_substates(
         }
 
         // Recompute `active` from the updated leaf set.
-        machine.active = compute_active_from_leaves(
-            &machine.active_leaves,
-            &q_substate_of,
-        );
+        machine.active = compute_active_from_leaves(&machine.active_leaves, &q_substate_of);
         machine.active.insert(machine_entity);
 
         // Insert Active on states that don't yet carry it.
         for &state in &machine.active {
             if q_active.get(state).is_err() {
-                commands
-                    .entity(state)
-                    .insert(Active { machine: machine_entity });
+                commands.entity(state).insert(Active {
+                    machine: machine_entity,
+                });
             }
         }
     }
@@ -277,9 +267,7 @@ fn run_gearbox_schedule(world: &mut World) {
         }
     }
 
-    warn!(
-        "GearboxSchedule hit iteration cap ({cap}). Possible transition loop!"
-    );
+    warn!("GearboxSchedule hit iteration cap ({cap}). Possible transition loop!");
 }
 
 // ---------------------------------------------------------------------------
@@ -330,24 +318,30 @@ impl Plugin for GearboxPlugin {
         // states, which pass through Blocker → SideEffect and are resolved
         // in the NEXT iteration's TransitionPhase.
         #[cfg(not(feature = "gauge"))]
-        schedule.configure_sets((
-            GearboxPhase::TransitionPhase,
-            GearboxPhase::ExitPhase,
-            GearboxPhase::EntryPhase,
-            GearboxPhase::EdgeDetectPhase,
-            GearboxPhase::BlockerPhase,
-            GearboxPhase::SideEffectPhase,
-        ).chain());
+        schedule.configure_sets(
+            (
+                GearboxPhase::TransitionPhase,
+                GearboxPhase::ExitPhase,
+                GearboxPhase::EntryPhase,
+                GearboxPhase::EdgeDetectPhase,
+                GearboxPhase::BlockerPhase,
+                GearboxPhase::SideEffectPhase,
+            )
+                .chain(),
+        );
         #[cfg(feature = "gauge")]
-        schedule.configure_sets((
-            GearboxPhase::TransitionPhase,
-            GearboxPhase::ExitPhase,
-            GearboxPhase::EntryPhase,
-            GearboxPhase::GaugeSync,
-            GearboxPhase::EdgeDetectPhase,
-            GearboxPhase::BlockerPhase,
-            GearboxPhase::SideEffectPhase,
-        ).chain());
+        schedule.configure_sets(
+            (
+                GearboxPhase::TransitionPhase,
+                GearboxPhase::ExitPhase,
+                GearboxPhase::EntryPhase,
+                GearboxPhase::GaugeSync,
+                GearboxPhase::EdgeDetectPhase,
+                GearboxPhase::BlockerPhase,
+                GearboxPhase::SideEffectPhase,
+            )
+                .chain(),
+        );
         app.add_schedule(schedule);
 
         // NOTE: `register_transition::<Done>` must come AFTER `add_schedule`.
@@ -364,10 +358,8 @@ impl Plugin for GearboxPlugin {
             app.configure_sets(
                 GearboxSchedule,
                 (
-                    bevy_gauge::prelude::WriteBackSet
-                        .in_set(GearboxPhase::GaugeSync),
-                    bevy_gauge::prelude::AttributeDerivedSet
-                        .in_set(GearboxPhase::GaugeSync),
+                    bevy_gauge::prelude::WriteBackSet.in_set(GearboxPhase::GaugeSync),
+                    bevy_gauge::prelude::AttributeDerivedSet.in_set(GearboxPhase::GaugeSync),
                 ),
             );
         }
@@ -376,19 +368,15 @@ impl Plugin for GearboxPlugin {
             GearboxSchedule,
             (
                 // Reset work counter at the start of each iteration.
-                resolve::reset_pending_count
-                    .before(GearboxPhase::TransitionPhase),
+                resolve::reset_pending_count.before(GearboxPhase::TransitionPhase),
                 // Resolve init/delay/previous-iteration edge messages.
-                resolve::resolve_transitions
-                    .in_set(GearboxPhase::TransitionPhase),
+                resolve::resolve_transitions.in_set(GearboxPhase::TransitionPhase),
                 // Flush Active insert/remove so Exit/Entry phases see changes.
                 ApplyDeferred
                     .after(GearboxPhase::TransitionPhase)
                     .before(GearboxPhase::ExitPhase),
-                delay::cancel_delay_timers
-                    .in_set(GearboxPhase::ExitPhase),
-                delay::start_delay_timers
-                    .in_set(GearboxPhase::EntryPhase),
+                delay::cancel_delay_timers.in_set(GearboxPhase::ExitPhase),
+                delay::start_delay_timers.in_set(GearboxPhase::EntryPhase),
                 // Flush deferred commands from Exit/Entry (e.g.
                 // StateComponent insert/remove) so they are visible to
                 // EdgeDetect (Changed<Active>).
@@ -399,8 +387,7 @@ impl Plugin for GearboxPlugin {
                 messages::emit_terminal_done
                     .in_set(GearboxPhase::EdgeDetectPhase)
                     .before(resolve::check_always_edges),
-                resolve::check_always_edges
-                    .in_set(GearboxPhase::EdgeDetectPhase),
+                resolve::check_always_edges.in_set(GearboxPhase::EdgeDetectPhase),
                 // Flush so blocker systems see edge-detect commands.
                 ApplyDeferred
                     .after(GearboxPhase::EdgeDetectPhase)

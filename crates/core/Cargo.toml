@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox_core"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = "Core state machine library for bevy_gearbox"
 license = "MIT OR Apache-2.0"
@@ -14,9 +14,9 @@ name = "bevy_gearbox_core"
 path = "src/lib.rs"
 
 [dependencies]
-bevy = { version = "0.18", default-features = false, features = ["bevy_state", "bevy_log"] }
+bevy = { workspace = true, features = ["bevy_state", "bevy_log"] }
 inventory = "0.3"
-bevy_gauge = { version = "0.4.5", optional = true }
+bevy_gauge = { version = "0.5", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"

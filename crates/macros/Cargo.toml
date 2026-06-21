@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox_macros"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = "Derive macros for bevy_gearbox (schedule-based API)"
 license = "MIT OR Apache-2.0"

@@ -1,3 +1,6 @@
+# Local cargo config (e.g. path patch for bevy_gauge during development)
+.cargo/
+
 # Rust build artifacts
 target
 crates/**/target

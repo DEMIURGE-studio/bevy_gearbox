@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox_protocol"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = "Protocol (client/server) for Bevy Gearbox editor/app communication"
 license = "MIT OR Apache-2.0"
@@ -12,14 +12,14 @@ categories = ["game-development", "game-engines"]
 [features]
 default = ["client"]
 client = []
-server = ["bevy/bevy_remote", "bevy/bevy_scene", "dep:bevy_gearbox"]
+server = ["bevy/bevy_remote", "bevy/bevy_world_serialization", "dep:bevy_gearbox"]
 
 [dependencies]
-bevy = { version = "0.18", default-features = false, features = [
+bevy = { workspace = true, features = [
     "bevy_remote",
     "bevy_log",
 ] }
-bevy_gearbox = { package = "bevy_gearbox_core", version = "0.6.0", path = "../core", optional = true }
+bevy_gearbox = { package = "bevy_gearbox_core", version = "0.7.0", path = "../core", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"] }

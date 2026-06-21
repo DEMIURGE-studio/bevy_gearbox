@@ -77,7 +77,7 @@ impl Plugin for ServerPlugin {
 #[derive(Deserialize)]
 struct SaveGraphParams { entity: Entity, path: String }
 
-fn serialize_scene(world: &World, scene: &bevy::scene::DynamicScene) -> Result<String, String> {
+fn serialize_scene(world: &World, scene: &bevy::world_serialization::DynamicWorld) -> Result<String, String> {
     let reg = world.resource::<AppTypeRegistry>();
     let reg = reg.read();
     scene.serialize(&reg).map_err(|e| format!("serialize scene: {e}"))
@@ -131,10 +131,11 @@ fn collect_state_machine_entities(world: &mut World, root: Entity) -> Vec<Entity
     out
 }
 
-fn build_scene_from_root(world: &mut World, root: Entity) -> bevy::scene::DynamicScene {
-    use bevy::scene::DynamicSceneBuilder;
+fn build_scene_from_root(world: &mut World, root: Entity) -> bevy::world_serialization::DynamicWorld {
+    use bevy::world_serialization::DynamicWorldBuilder;
     let entities = collect_state_machine_entities(world, root);
-    let builder = DynamicSceneBuilder::from_world(world)
+    let type_registry = world.resource::<AppTypeRegistry>().read();
+    let builder = DynamicWorldBuilder::from_world(world, &type_registry)
         .allow_all()
         .extract_entities(entities.into_iter())
         .build();
@@ -142,7 +143,7 @@ fn build_scene_from_root(world: &mut World, root: Entity) -> bevy::scene::Dynami
 }
 
 // Remove ephemeral data from components inside a DynamicScene prior to serialization
-fn scrub_state_machine_ephemeral(scene: &mut bevy::scene::DynamicScene) {
+fn scrub_state_machine_ephemeral(scene: &mut bevy::world_serialization::DynamicWorld) {
     for ent in scene.entities.iter_mut() {
         for comp in ent.components.iter_mut() {
             if comp.represents::<gearbox::StateMachine>() {
@@ -742,7 +743,7 @@ fn make_parent_handler(In(params): In<Option<Value>>, world: &mut World) -> BrpR
     if !world.entities().contains(p.target) { return Err(BrpError { code: error_codes::INVALID_PARAMS, message: "invalid entity".to_string(), data: None }); }
     // Ensure a child exists
     let mut has_child = false;
-    if let Some(children) = world.get::<gearbox::Substates>(p.target) { for _ in children.into_iter() { has_child = true; break; } }
+    if let Some(children) = world.get::<gearbox::Substates>(p.target) { if children.into_iter().next().is_some() { has_child = true; } }
     let child = if has_child {
         // Pick first child as initial
         world.get::<gearbox::Substates>(p.target).and_then(|c| c.into_iter().next().copied())
@@ -770,7 +771,7 @@ fn make_parallel_handler(In(params): In<Option<Value>>, world: &mut World) -> Br
     if !world.entities().contains(p.target) { return Err(BrpError { code: error_codes::INVALID_PARAMS, message: "invalid entity".to_string(), data: None }); }
     // Ensure a child exists to keep it a parent node
     let mut has_child = false;
-    if let Some(children) = world.get::<gearbox::Substates>(p.target) { for _ in children.into_iter() { has_child = true; break; } }
+    if let Some(children) = world.get::<gearbox::Substates>(p.target) { if children.into_iter().next().is_some() { has_child = true; } }
     if !has_child {
         let mut e = world.spawn_empty();
         if let Some(name) = p.name.as_ref() { e.insert(Name::new(name.clone())); }
@@ -857,9 +858,9 @@ fn create_transition_handler(In(params): In<Option<Value>>, world: &mut World) -
             let refl_comp_cloned = refl_comp.clone();
             drop(reg_read);
             let mut ew = world.entity_mut(entity);
-            let empty = bevy::reflect::DynamicStruct::default();
+            let empty = bevy::reflect::structs::DynamicStruct::default();
             let reg_read_again = reg_arc.read();
-            refl_comp_cloned.insert(&mut ew, &empty, &*reg_read_again);
+            refl_comp_cloned.insert(&mut ew, &empty, &reg_read_again);
         } else {
             let _ = world.despawn(entity);
             return Err(BrpError { code: error_codes::INTERNAL_ERROR, message: "not a ReflectComponent".to_string(), data: None });
@@ -919,7 +920,7 @@ fn machine_graph_handler(In(params): In<Option<Value>>, world: &mut World) -> Br
         if !visited.insert(cur) { continue; }
         // Collect node fields (string-centric)
         let mut components: BTreeMap<String, Value> = BTreeMap::new();
-        if let Some(name) = q_name.get(world, cur).ok() { components.insert(crate::components::NAME.to_string(), Value::String(name.as_str().to_string())); }
+        if let Ok(name) = q_name.get(world, cur) { components.insert(crate::components::NAME.to_string(), Value::String(name.as_str().to_string())); }
         if let Some(init) = q_initial.get(world, cur).ok().flatten() {
             // InitialState points to a child; serialize as string of entity bits for simplicity
             components.insert(crate::components::INITIAL_STATE.to_string(), Value::String(init.0.to_bits().to_string()));
@@ -930,11 +931,11 @@ fn machine_graph_handler(In(params): In<Option<Value>>, world: &mut World) -> Br
         }
         // Children
         let mut children_ids: Vec<String> = Vec::new();
-        if let Some(children) = q_children.get(world, cur).ok() {
+        if let Ok(children) = q_children.get(world, cur) {
             for c in children.into_iter().copied() { children_ids.push(c.to_bits().to_string()); queue.push_back((Some(cur), c)); }
         }
         if !children_ids.is_empty() {
-            components.insert(crate::components::STATE_CHILDREN.to_string(), Value::Array(children_ids.into_iter().map(|s| Value::String(s)).collect()));
+            components.insert(crate::components::STATE_CHILDREN.to_string(), Value::Array(children_ids.into_iter().map(Value::String).collect()));
         }
 
         // Relationships for edges (provide adjacency directly on nodes)

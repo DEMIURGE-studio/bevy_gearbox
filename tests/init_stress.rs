@@ -6,7 +6,6 @@
 //! `StateComponent<InBackpack>` marker on the machine root, while items
 //! that go through a message-driven transition (EquipIt, UnequipIt) work.
 
-use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use bevy_gearbox::prelude::*;
 use bevy_gearbox::GearboxPlugin;

@@ -4,7 +4,7 @@ use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 /// Marks an entity as a state machine root and tracks active states.
-#[derive(Component, Default, Debug, Reflect)]
+#[derive(Component, Default, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct StateMachine {
     pub active: HashSet<Entity>,
@@ -32,8 +32,13 @@ pub struct Active {
 }
 
 /// Which child state to enter by default when a parent state is entered.
-#[derive(Component)]
+#[derive(Component, FromTemplate)]
 pub struct InitialState(pub Entity);
+
+/// Marker placed on a substate to declare it as its parent's initial state,
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
+pub struct Initial;
 
 /// Relationship: this state is a substate of another.
 #[derive(Component, Clone, PartialEq, Eq, Debug, Reflect)]
@@ -85,11 +90,11 @@ impl<'a> IntoIterator for &'a Transitions {
 }
 
 /// Target state of a transition edge.
-#[derive(Component)]
+#[derive(Component, FromTemplate)]
 pub struct Target(pub Entity);
 
 /// Marker: this edge fires automatically when its source is active.
-#[derive(Component, Reflect)]
+#[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct AlwaysEdge;
 
@@ -103,7 +108,7 @@ pub enum EdgeKind {
 }
 
 /// Delayed transition: fire after `duration` elapses while the source is active.
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 pub struct Delay {
     pub duration: Duration,
 }
@@ -128,7 +133,7 @@ pub struct EdgeTimer(pub Timer);
 /// Marks a state as terminal (XState "final state"). When entered, a [`Done`]
 /// message is emitted targeting the parent state (via [`SubstateOf`]). The
 /// parent can then transition out via a `MessageEdge<Done>`.
-#[derive(Component, Default, Reflect)]
+#[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct TerminalState;
 

@@ -58,8 +58,8 @@ pub use commands::{
     SpawnTransition, TransitionBuilder, TransitionExt,
 };
 pub use components::{
-    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InitialState, ResetEdge, ResetScope, Source,
-    StateMachine, SubstateOf, Substates, Target, TerminalState, Transitions,
+    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, Initial, InitialState, ResetEdge, ResetScope,
+    Source, StateMachine, SubstateOf, Substates, Target, TerminalState, Transitions,
 };
 pub use history::{History, HistoryState};
 pub use messages::{
@@ -429,5 +429,15 @@ impl Plugin for GearboxPlugin {
                 .in_set(GearboxSet)
                 .after(run_gearbox_schedule),
         );
+
+        app.add_observer(promote_initial);
+        app.register_type::<Initial>();
+    }
+}
+
+fn promote_initial(add: On<Add, Initial>, q_substate_of: Query<&SubstateOf>, mut commands: Commands) {
+    let child = add.entity;
+    if let Ok(SubstateOf(parent)) = q_substate_of.get(child) {
+        commands.entity(*parent).insert(InitialState(child));
     }
 }

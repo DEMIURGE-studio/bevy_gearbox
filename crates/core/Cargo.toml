@@ -20,6 +20,7 @@ bevy_gauge = { version = "0.5", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
+bevy = { workspace = true, features = ["bevy_scene", "bevy_asset"] }
 
 [features]
 default = []

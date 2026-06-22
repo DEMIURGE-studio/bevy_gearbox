@@ -73,6 +73,15 @@ impl<M: GearboxMessage> Default for MessageEdge<M> {
     }
 }
 
+impl<M: GearboxMessage> Clone for MessageEdge<M> {
+    fn clone(&self) -> Self {
+        Self {
+            _marker: PhantomData,
+            validator: self.validator.clone(),
+        }
+    }
+}
+
 impl<M: GearboxMessage> MessageEdge<M> {
     pub fn new(validator: Option<M::Validator>) -> Self {
         Self {

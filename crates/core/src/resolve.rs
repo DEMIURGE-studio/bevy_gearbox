@@ -340,11 +340,14 @@ pub(crate) fn resolve_transitions(
 
         for &state in &machine.active {
             if !old_active.contains(&state) || exited_all.contains(&state) {
-                // New or re-entered: insert (triggers Added<Active>)
+                // New or re-entered (exited then re-added): triggers Added<Active>.
                 commands.entity(state).insert(Active { machine: msg.machine });
-            } else if state == msg.target {
-                // Target stayed active (e.g. child→parent): re-insert to
-                // trigger Changed<Active> so systems can detect re-entry.
+            } else if state == msg.target
+                || (!is_internal
+                    && q_substate_of
+                        .iter_ancestors(state)
+                        .any(|a| a == msg.target))
+            {
                 commands.entity(state).insert(Active { machine: msg.machine });
             }
         }

@@ -53,12 +53,13 @@ use resolve::PendingCount;
 #[doc(hidden)]
 pub use inventory;
 
+#[allow(deprecated)] // re-export still carries the deprecated authoring traits
 pub use commands::{
     BuildEntityEvent, BuildTransition, GearboxCommandsExt, InitStateMachine, SpawnSubstate,
     SpawnTransition, TransitionBuilder, TransitionExt,
 };
 pub use components::{
-    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, Initial, InitialState, ResetEdge, ResetScope,
+    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InitialState, ResetEdge, ResetScope,
     Source, StateMachine, SubstateOf, Substates, Target, TerminalState, Transitions,
 };
 pub use history::{History, HistoryState};
@@ -429,15 +430,5 @@ impl Plugin for GearboxPlugin {
                 .in_set(GearboxSet)
                 .after(run_gearbox_schedule),
         );
-
-        app.add_observer(promote_initial);
-        app.register_type::<Initial>();
-    }
-}
-
-fn promote_initial(add: On<Add, Initial>, q_substate_of: Query<&SubstateOf>, mut commands: Commands) {
-    let child = add.entity;
-    if let Ok(SubstateOf(parent)) = q_substate_of.get(child) {
-        commands.entity(*parent).insert(InitialState(child));
     }
 }

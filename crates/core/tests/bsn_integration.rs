@@ -33,7 +33,8 @@ use bevy::scene::prelude::{bsn, EntityWorldMutSceneExt, Scene, WorldSceneExt};
 use bevy::scene::ScenePlugin;
 
 use bevy_gearbox_core::{
-    AlwaysEdge, InitialState, Source, StateMachine, SubstateOf, Substates, Target, Transitions,
+    AlwaysEdge, EdgeKind, InitialState, Source, StateMachine, SubstateOf, Substates, Target,
+    Transitions,
 };
 
 fn test_app() -> App {
@@ -199,6 +200,32 @@ fn full_invoked_chart_single_scope() {
     // Invoking → Cooldown.
     let inv_edge = collect::<Transitions>(world, invoking)[0];
     assert_eq!(world.entity(inv_edge).get::<Target>().unwrap().0, cooldown);
+}
+
+// 5b. EdgeKind::Internal lowers bare in a transition tuple (FromTemplate derive
+//     on the enum). A self-internal edge keeps the source active rather than
+//     exiting/re-entering — the structure here just asserts it resolves.
+#[test]
+fn edge_kind_internal_lowers_bare() {
+    let mut app = test_app();
+    let world = app.world_mut();
+
+    let root = world
+        .spawn_scene(bsn! {
+            StateMachine
+            Substates [
+                #Busy Transitions [ (Target(#Busy) AlwaysEdge EdgeKind::Internal) ],
+            ]
+        })
+        .unwrap()
+        .id();
+
+    let busy = substate_named(world, root, "Busy");
+    let edge = collect::<Transitions>(world, busy)[0];
+    assert!(
+        matches!(world.entity(edge).get::<EdgeKind>(), Some(EdgeKind::Internal)),
+        "EdgeKind::Internal resolved onto the edge"
+    );
 }
 
 // 6. Cross-scope references: BSN name scopes are per-bsn!, so a sub-scene cannot

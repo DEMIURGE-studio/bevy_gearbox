@@ -35,13 +35,8 @@ pub struct Active {
 #[derive(Component, FromTemplate)]
 pub struct InitialState(pub Entity);
 
-/// Marker placed on a substate to declare it as its parent's initial state,
-#[derive(Component, Default, Clone, Reflect)]
-#[reflect(Component)]
-pub struct Initial;
-
 /// Relationship: this state is a substate of another.
-#[derive(Component, Clone, PartialEq, Eq, Debug, Reflect)]
+#[derive(Component, Clone, PartialEq, Eq, Debug, Reflect, FromTemplate)]
 #[reflect(Component)]
 #[relationship(relationship_target = Substates)]
 pub struct SubstateOf(#[entities] pub Entity);
@@ -100,7 +95,8 @@ pub struct AlwaysEdge;
 
 /// Whether a transition is External (default, exits/re-enters the LCA) or
 /// Internal (stays within the source state, no exit/re-enter of the LCA).
-#[derive(Component, Default, Clone, Copy, Debug)]
+#[derive(Component, Default, Clone, Copy, Debug, Reflect, FromTemplate)]
+#[reflect(Component)]
 pub enum EdgeKind {
     #[default]
     External,

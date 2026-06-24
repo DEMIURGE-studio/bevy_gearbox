@@ -177,6 +177,219 @@ fn self_transition_exits_and_reenters() {
     );
 }
 
+/// A descendant -> ancestor self-transition (e.g. a repeater's `Fire -> Repeater`
+/// bounce) must re-fire `Changed<Active>` on the shared ancestor so that
+/// `Changed<Active>`-driven logic — like the diesel repeater tick — runs again.
+#[test]
+fn descendant_to_ancestor_self_transition_refires_changed_active() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, GearboxPlugin::default()));
+
+    #[derive(Resource, Default)]
+    struct PChanged(u32);
+
+    #[derive(Component)]
+    struct PMarker;
+
+    fn count_p_changed(
+        changed: Query<(), (Changed<Active>, With<PMarker>)>,
+        mut count: ResMut<PChanged>,
+    ) {
+        count.0 += changed.iter().count() as u32;
+    }
+
+    app.init_resource::<PChanged>();
+    app.add_systems(
+        GearboxSchedule,
+        count_p_changed.in_set(GearboxPhase::EntryPhase),
+    );
+
+    let world = app.world_mut();
+    let machine = world.spawn_empty().id();
+    // P is a compound ancestor with children A (initial) and B.
+    let p = world.spawn((SubstateOf(machine), PMarker)).id();
+    let a = world.spawn(SubstateOf(p)).id();
+    let b = world.spawn(SubstateOf(p)).id();
+
+    world.entity_mut(p).insert(InitialState(a));
+    world
+        .entity_mut(machine)
+        .insert((StateMachine::new(), InitialState(p)));
+
+    // Init: machine drills P -> A. P gains Active once (Changed fires once).
+    app.update();
+    assert!(app.world().get::<StateMachine>(machine).unwrap().is_active(&a));
+    assert_eq!(app.world().resource::<PChanged>().0, 1, "P Active changed once on init");
+
+    // Move to B (sibling transition under P; P stays active and is NOT the
+    // target, so its Active is untouched -> no Changed for P).
+    app.world_mut().write_message(TransitionMessage {
+        machine,
+        source: a,
+        target: b,
+        edge: None,
+        blocked: false,
+    });
+    app.update();
+    assert!(app.world().get::<StateMachine>(machine).unwrap().is_active(&b));
+    let before_bounce = app.world().resource::<PChanged>().0;
+    assert_eq!(before_bounce, 1, "A -> B must NOT re-fire Changed<Active> on the ancestor P");
+
+    // The bounce: descendant B -> ancestor P (external, edge = None). P is the
+    // target, so its Active is re-inserted to fire Changed<Active>; the machine
+    // then drills back to initial A.
+    app.world_mut().write_message(TransitionMessage {
+        machine,
+        source: b,
+        target: p,
+        edge: None,
+        blocked: false,
+    });
+    app.update();
+
+    let state = app.world().get::<StateMachine>(machine).unwrap();
+    assert!(
+        state.active_leaves.contains(&a),
+        "B -> P should re-enter P and drill back to its initial child A"
+    );
+    let after_bounce = app.world().resource::<PChanged>().0;
+    assert!(
+        after_bounce > before_bounce,
+        "descendant -> ancestor transition must re-fire Changed<Active> on P \
+         (changed before={before_bounce}, after={after_bounce})"
+    );
+}
+
+/// An external transition must re-enter the WHOLE subtree under the target, not
+/// just the target itself: a state that stays active because the target
+/// re-drilled back into it must still re-fire `Changed<Active>`.
+///
+/// Chain `P > M > L` (each the initial of its parent), settled in `L`. An
+/// external `L -> M` transition re-enters `M`, whose initial drills back to `L`.
+/// `L` never leaves the active set, but it IS re-entered, so it must re-signal.
+/// Before the subtree-re-entry fix, only `M` (the target) re-signaled and `L`
+/// was silently skipped.
+#[test]
+fn external_reentry_resignals_whole_subtree() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, GearboxPlugin::default()));
+
+    #[derive(Resource, Default)]
+    struct LChanged(u32);
+
+    #[derive(Component)]
+    struct LMarker;
+
+    fn count_l_changed(
+        changed: Query<(), (Changed<Active>, With<LMarker>)>,
+        mut count: ResMut<LChanged>,
+    ) {
+        count.0 += changed.iter().count() as u32;
+    }
+
+    app.init_resource::<LChanged>();
+    app.add_systems(
+        GearboxSchedule,
+        count_l_changed.in_set(GearboxPhase::EntryPhase),
+    );
+
+    let world = app.world_mut();
+    let machine = world.spawn_empty().id();
+    let p = world.spawn(SubstateOf(machine)).id();
+    let m = world.spawn(SubstateOf(p)).id();
+    let l = world.spawn((SubstateOf(m), LMarker)).id();
+
+    world.entity_mut(m).insert(InitialState(l));
+    world.entity_mut(p).insert(InitialState(m));
+    world
+        .entity_mut(machine)
+        .insert((StateMachine::new(), InitialState(p)));
+
+    app.update();
+    assert!(app.world().get::<StateMachine>(machine).unwrap().is_active(&l));
+    assert_eq!(app.world().resource::<LChanged>().0, 1, "L Active changed once on init");
+
+    // External L -> M (edge = None). M re-drills to its initial L; L stays active
+    // but must be re-entered as part of M's subtree.
+    app.world_mut().write_message(TransitionMessage {
+        machine,
+        source: l,
+        target: m,
+        edge: None,
+        blocked: false,
+    });
+    app.update();
+
+    let state = app.world().get::<StateMachine>(machine).unwrap();
+    assert!(state.active_leaves.contains(&l), "L should still be active after re-entry");
+    assert_eq!(
+        app.world().resource::<LChanged>().0,
+        2,
+        "L must re-fire Changed<Active> when re-entered as part of the M subtree"
+    );
+}
+
+/// An *internal* transition does NOT re-enter the target subtree, so a
+/// stayed-active descendant must NOT re-signal. Same `P > M > L` shape, but the
+/// `L -> M` edge is `EdgeKind::Internal`.
+#[test]
+fn internal_reentry_does_not_resignal_subtree() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, GearboxPlugin::default()));
+
+    #[derive(Resource, Default)]
+    struct LChanged(u32);
+
+    #[derive(Component)]
+    struct LMarker;
+
+    fn count_l_changed(
+        changed: Query<(), (Changed<Active>, With<LMarker>)>,
+        mut count: ResMut<LChanged>,
+    ) {
+        count.0 += changed.iter().count() as u32;
+    }
+
+    app.init_resource::<LChanged>();
+    app.add_systems(
+        GearboxSchedule,
+        count_l_changed.in_set(GearboxPhase::EntryPhase),
+    );
+
+    let world = app.world_mut();
+    let machine = world.spawn_empty().id();
+    let p = world.spawn(SubstateOf(machine)).id();
+    let m = world.spawn(SubstateOf(p)).id();
+    let l = world.spawn((SubstateOf(m), LMarker)).id();
+
+    // Internal edge L -> M, fired manually below.
+    let edge = world.spawn((Source(l), Target(m), EdgeKind::Internal)).id();
+
+    world.entity_mut(m).insert(InitialState(l));
+    world.entity_mut(p).insert(InitialState(m));
+    world
+        .entity_mut(machine)
+        .insert((StateMachine::new(), InitialState(p)));
+
+    app.update();
+    let before = app.world().resource::<LChanged>().0;
+
+    app.world_mut().write_message(TransitionMessage {
+        machine,
+        source: l,
+        target: m,
+        edge: Some(edge),
+        blocked: false,
+    });
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<LChanged>().0,
+        before,
+        "internal transition must NOT re-enter / re-signal the descendant L"
+    );
+}
+
 /// Machine -> P (InitialState=Q) -> Q (InitialState=leaf)
 /// Initialization should drill all the way down to the leaf.
 #[test]

@@ -149,7 +149,6 @@ pub(crate) fn resolve_transitions(
             continue;
         }
         let Ok(mut machine) = q_machine.get_mut(msg.machine) else {
-            info!("resolve_transitions: no machine component on {:?}", msg.machine);
             continue;
         };
 
@@ -339,9 +338,6 @@ pub(crate) fn resolve_transitions(
             commands.entity(state).remove::<Active>();
         }
 
-        // Insert Active on newly entered states, or re-insert on states that
-        // stayed active but are the target of a transition (triggers Changed<Active>
-        // without triggering RemovedComponents<Active>).
         for &state in &machine.active {
             if !old_active.contains(&state) || exited_all.contains(&state) {
                 // New or re-entered: insert (triggers Added<Active>)

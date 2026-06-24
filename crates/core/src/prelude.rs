@@ -17,6 +17,7 @@ pub use crate::messages::{
     GearboxMessage, MessageValidator, AcceptAll, MessageEdge,
     Done,
 };
+#[allow(deprecated)]
 pub use crate::commands::{
     SpawnSubstate, SpawnTransition, BuildTransition, SpawnBranch, BranchBuilder,
     TransitionExt, InitStateMachine,

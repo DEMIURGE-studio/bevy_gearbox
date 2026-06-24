@@ -1,3 +1,9 @@
+// The imperative state-machine authoring traits below are deprecated in favour
+// of `bsn!` scenes. They still implement each other internally (builders, impl
+// blocks), so silence the in-module deprecation-use warnings here; the
+// `#[deprecated]` attributes still fire for external callers.
+#![allow(deprecated)]
+
 use std::time::Duration;
 
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
@@ -7,6 +13,9 @@ use crate::components::*;
 use crate::messages::{GearboxMessage, MessageEdge};
 
 /// Extension trait for spawning substates with less boilerplate.
+#[deprecated(
+    note = "imperative state-machine authoring is superseded by `bsn!` scenes — build charts with the `Substates`/`Transitions` relationship blocks and bare `SubstateOf`/`Source`/`Target` components"
+)]
 pub trait SpawnSubstate {
     type Out<'a>
     where
@@ -35,6 +44,9 @@ impl SpawnSubstate for ChildSpawnerCommands<'_> {
 }
 
 /// Extension trait for spawning transitions.
+#[deprecated(
+    note = "imperative state-machine authoring is superseded by `bsn!` scenes — author edges as `Transitions [ (Target(#X) MessageEdge::<M>::default()) ]`"
+)]
 pub trait SpawnTransition {
     type Out<'a>
     where
@@ -86,6 +98,7 @@ impl SpawnTransition for ChildSpawnerCommands<'_> {
 }
 
 /// Builder for always-transitions with deferred component inserts.
+#[deprecated(note = "superseded by `bsn!` scenes — put edge components directly in a `Transitions [ ... ]` tuple")]
 pub struct TransitionBuilder {
     pub(crate) deferred: Vec<Box<dyn FnOnce(&mut EntityCommands) + Send + Sync>>,
 }
@@ -120,6 +133,7 @@ impl TransitionBuilder {
 }
 
 /// Extension trait for building guarded always-transitions.
+#[deprecated(note = "superseded by `bsn!` scenes — author guarded edges as `Transitions [ ... ]` entries carrying their guard components")]
 pub trait BuildTransition {
     type Out<'a>
     where
@@ -181,6 +195,7 @@ impl BuildTransition for ChildSpawnerCommands<'_> {
 // ---------------------------------------------------------------------------
 
 /// Builder for configuring branch arms.
+#[deprecated(note = "superseded by `bsn!` scenes (`BranchTransition`/`BranchArm`); note branch guard evaluation is itself still a TODO")]
 pub struct BranchBuilder {
     arms: Vec<BranchArmBuilder>,
     otherwise: Option<Entity>,
@@ -221,6 +236,7 @@ impl BranchBuilder {
 }
 
 /// Extension trait for spawning branching transitions.
+#[deprecated(note = "superseded by `bsn!` scenes (`BranchTransition`/`BranchArm`); note branch guard evaluation is itself still a TODO")]
 pub trait SpawnBranch {
     type Out<'a>
     where
@@ -324,6 +340,7 @@ impl SpawnBranch for ChildSpawnerCommands<'_> {
 }
 
 /// Extension methods for transition entities.
+#[deprecated(note = "superseded by `bsn!` scenes — put `Delay`/`Name` directly on the edge tuple in `Transitions [ ... ]`")]
 pub trait TransitionExt {
     fn with_delay(&mut self, duration: Duration) -> &mut Self;
     fn with_name(&mut self, name: impl Into<String>) -> &mut Self;
@@ -339,6 +356,7 @@ impl TransitionExt for EntityCommands<'_> {
 }
 
 /// Extension for initializing a state machine on an existing entity.
+#[deprecated(note = "superseded by `bsn!` scenes — author the root as `StateMachine InitialState(#X)` (apply onto a pre-spawned entity with `apply_scene`)")]
 pub trait InitStateMachine {
     fn init_state_machine(&mut self, initial_state: impl Into<Option<Entity>>) -> &mut Self;
 }

@@ -128,6 +128,7 @@ fn on_exit(mut removed: RemovedComponents<Active>) {
 
 | Bevy | Gearbox |
 | ---- | ------- |
+| 0.19 | 0.7     |
 | 0.18 | 0.6     |
 | 0.18 | 0.5     |
 | 0.17 | 0.4     |

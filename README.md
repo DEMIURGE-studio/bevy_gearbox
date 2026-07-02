@@ -44,48 +44,72 @@ fn main() {
 ## Building a state machine
 
 ```rust
-// States are entities
-let ready = commands.spawn_substate(machine, Name::new("Ready")).id();
-let active = commands.spawn_substate(machine, Name::new("Active")).id();
+use bevy::prelude::*;
+use bevy::scene::prelude::{bsn, CommandsSceneExt};
+use bevy_gearbox::prelude::*;
 
-// Transitions are entities
-commands.spawn((Source(active), Target(ready), AlwaysEdge));
-
-// ...with helpers to save boilerplate
-commands.spawn_transition::<Activate>(ready, active);
-
-// Initialize the machine
-commands.entity(machine).init_state_machine(ready);
+fn spawn_machine(mut commands: Commands) {
+    commands.spawn_scene(bsn! {
+        StateMachine InitialState(#Ready)
+        Substates [
+            #Ready Transitions [
+                (Target(#Active) MessageEdge::<Activate>::default())
+            ],
+            #Active Transitions [
+                (Target(#Ready) AlwaysEdge)
+            ],
+        ]
+    });
+}
 ```
 
 ### Triggering transitions
 
-```rust
-// Define a message
-#[derive(Message, Clone)]
-struct Activate { machine: Entity }
+Define a message with `#[derive(GearboxMessage)]`, marking the entity it's
+addressed to with `#[gearbox(target)]` (the message listener walks `SubstateOf`
+from there to find the machine root):
 
-impl GearboxMessage for Activate {
-    type Validator = AcceptAll;
-    fn machine(&self) -> Entity { self.machine }
+```rust
+use bevy::prelude::*;
+use bevy_gearbox::prelude::*;
+
+#[derive(Message, Clone, Reflect, GearboxMessage)]
+struct Activate {
+    #[gearbox(target)]
+    machine: Entity,
 }
 
-// Write it from any system
-fn input_system(mut writer: MessageWriter<Activate>) {
-    writer.write(Activate { machine: my_entity });
+// Write it from any system.
+fn input_system(mut writer: MessageWriter<Activate>, machine: Single<Entity, With<StateMachine>>) {
+    writer.write(Activate { machine: *machine });
+}
+```
+
+The derive also auto-registers the message type through `inventory`. Add
+`gearbox_auto_register_plugin` to install every derived message's listener, or
+call `app.register_transition::<Activate>()` explicitly.
+
+To filter which messages match an edge, supply a custom validator (the default
+is `AcceptAll`):
+
+```rust
+#[derive(Message, Clone, Reflect, GearboxMessage)]
+#[gearbox(validator = MyValidator)]
+struct Fire {
+    #[gearbox(target)]
+    machine: Entity,
 }
 ```
 
 ### State components
 
-Automatically insert/remove components on the machine root based on which state is active:
+Automatically insert/remove a component on the machine root based on which
+state is active. `StateComponent` isn't `Default`, so insert it through a
+`template` closure:
 
 ```rust
-commands.spawn((
-    SubstateOf(machine),
-    StateComponent(Walking),
-));
-// Walking component appears on the machine entity when this state is active
+#Walking template(|_| Ok(StateComponent(Walking)))
+// The `Walking` component appears on the machine root while this state is active.
 ```
 
 ### Reacting to state changes
@@ -118,11 +142,35 @@ fn on_exit(mut removed: RemovedComponents<Active>) {
 - Reset edges (clear subtree state on transition)
 - Internal vs external transitions
 
-> [!WARNING]
->
-> When building state machines through commands, add the `StateMachine` component **last**.
-> This initializes the machine, and if the hierarchy isn't fully built yet, initialization
-> will be incomplete. This is not a problem when spawning from scenes.
+## Migrating from the builder API
+
+The imperative builder traits (`spawn_substate`, `spawn_transition`,
+`init_state_machine`, `build_transition_always`, `spawn_branch`, …) are
+**deprecated** and will be removed in the next major release. The
+`#[gearbox_message]` / `#[transition_message]` attribute macros have been
+**removed** - define messages with `#[derive(GearboxMessage)]`. Author machines
+as `bsn!` scenes instead.
+
+This is a restructuring, not a one-to-one swap. The complicated builder 
+collapses into a single `bsn` block. 
+
+```rust
+// Before - imperative builders:
+let ready  = commands.spawn_substate(machine, Name::new("Ready")).id();
+let active = commands.spawn_substate(machine, Name::new("Active")).id();
+commands.spawn_transition::<Activate>(ready, active);
+commands.spawn((Source(active), Target(ready), AlwaysEdge));
+commands.entity(machine).init_state_machine(ready);
+
+// After - one bsn! scene:
+commands.spawn_scene(bsn! {
+    StateMachine InitialState(#Ready)
+    Substates [
+        #Ready  Transitions [ (Target(#Active) MessageEdge::<Activate>::default()) ],
+        #Active Transitions [ (Target(#Ready) AlwaysEdge) ],
+    ]
+});
+```
 
 ## Version Table
 

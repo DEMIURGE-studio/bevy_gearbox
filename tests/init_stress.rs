@@ -37,7 +37,7 @@ fn single_item_spawned_via_commands_gets_state_component() {
             parent
                 .commands_mut()
                 .entity(item)
-                .init_state_machine(in_bag);
+                .insert((StateMachine::new(), InitialState(in_bag)));
         });
     });
 
@@ -72,7 +72,7 @@ fn seven_items_spawned_same_frame_all_get_state_component() {
                 parent
                     .commands_mut()
                     .entity(item)
-                    .init_state_machine(in_bag);
+                    .insert((StateMachine::new(), InitialState(in_bag)));
             });
         }
     });
@@ -100,15 +100,10 @@ fn seven_items_spawned_same_frame_all_get_state_component() {
 /// bag and the starter wand is equipped immediately.
 #[test]
 fn six_items_stay_in_bag_one_gets_equipped() {
-    #[derive(Message, Clone, Reflect)]
+    #[derive(Message, Clone, Reflect, GearboxMessage)]
     struct EquipIt {
+        #[gearbox(target)]
         item: Entity,
-    }
-    impl GearboxMessage for EquipIt {
-        type Validator = AcceptAll;
-        fn target(&self) -> Entity {
-            self.item
-        }
     }
 
     #[derive(Resource)]
@@ -132,11 +127,11 @@ fn six_items_stay_in_bag_one_gets_equipped() {
             let equipped = parent
                 .spawn((SubstateOf(wand), StateComponent(Equipped)))
                 .id();
-            parent.spawn_transition::<EquipIt>(in_bag, equipped);
+            parent.spawn((Source(in_bag), Target(equipped), MessageEdge::<EquipIt>::default()));
             parent
                 .commands_mut()
                 .entity(wand)
-                .init_state_machine(in_bag);
+                .insert((StateMachine::new(), InitialState(in_bag)));
         });
         commands.insert_resource(Wand(wand));
 
@@ -151,7 +146,7 @@ fn six_items_stay_in_bag_one_gets_equipped() {
                 parent
                     .commands_mut()
                     .entity(item)
-                    .init_state_machine(in_bag);
+                    .insert((StateMachine::new(), InitialState(in_bag)));
             });
             bagged.push(item);
         }

@@ -203,8 +203,8 @@ fn nested_sequential_then_parallel() {
 ///
 /// This is a regression test for the init system: previously
 /// `enqueue_machine_init` required `&InitialState` in its query and silently
-/// skipped any machine without one, even though `init_state_machine(None)`
-/// was a valid call. Self-targeting the init transition resolves the
+/// skipped any machine without one, even though a `StateMachine` with no
+/// `InitialState` is valid. Self-targeting the init transition resolves the
 /// machine entity as a parallel parent through the existing leaf-finder.
 #[test]
 fn parallel_root_machine_activates_all_children() {

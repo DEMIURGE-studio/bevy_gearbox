@@ -7,20 +7,22 @@ use crate::components::*;
 use crate::resolve::{PendingCount, TransitionMessage};
 
 /// Trait implemented by user message types that can trigger state machine
-/// transitions. The schedule version of core's `TransitionEvent`.
+/// transitions.
+///
+/// Derive it with `#[derive(GearboxMessage)]`, marking the addressed entity
+/// with `#[gearbox(target)]`:
 ///
 /// ```rust,ignore
-/// #[derive(Message, Clone)]
+/// #[derive(Message, Clone, Reflect, GearboxMessage)]
 /// struct Attack {
+///     #[gearbox(target)]
 ///     machine: Entity,
 ///     damage: f32,
 /// }
-///
-/// impl GearboxMessage for Attack {
-///     type Validator = AcceptAll;
-///     fn machine(&self) -> Entity { self.machine }
-/// }
 /// ```
+///
+/// The derive fills in `target()` (from the marked field) and defaults
+/// `Validator` to [`AcceptAll`]; override it with `#[gearbox(validator = ..)]`.
 pub trait GearboxMessage: Message + Clone + Send + Sync + bevy::reflect::TypePath + 'static {
     /// Per-edge validator type. Use [`AcceptAll`] if every edge of this
     /// message type should match unconditionally.

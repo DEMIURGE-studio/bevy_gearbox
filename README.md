@@ -85,9 +85,12 @@ fn input_system(mut writer: MessageWriter<Activate>, machine: Single<Entity, Wit
 }
 ```
 
-The derive also auto-registers the message type through `inventory`. Add
-`gearbox_auto_register_plugin` to install every derived message's listener, or
-call `app.register_transition::<Activate>()` explicitly.
+The derive also auto-registers the message type through `inventory`, and
+`GearboxPlugin` installs every derived message's listener on build — so a
+derived message just works with no extra wiring. (You can still call
+`app.register_transition::<Activate>()` explicitly, e.g. for generic message
+types, which `inventory` can't auto-register; it's deduped, so overlap is
+harmless.)
 
 To filter which messages match an edge, supply a custom validator (the default
 is `AcceptAll`):

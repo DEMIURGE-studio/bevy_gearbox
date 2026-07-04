@@ -27,6 +27,7 @@
 pub mod commands;
 pub mod components;
 pub mod delay;
+pub mod edges;
 pub mod helpers;
 pub mod history;
 pub mod messages;
@@ -68,7 +69,7 @@ pub use messages::{
     MessageEdge, MessageValidator,
 };
 pub use registration::{
-    bridge_to_bevy_state, gearbox_auto_register_plugin, replay_deferred_messages, DeferEvent,
+    bridge_to_bevy_state, replay_deferred_messages, DeferEvent,
     InstalledStateBridges, InstalledStateComponents, InstalledTransitions, RegistrationAppExt,
     StateBridgeInstaller, StateInstaller, TransitionInstaller,
 };
@@ -352,6 +353,11 @@ impl Plugin for GearboxPlugin {
         // `add_schedule`'s `insert` — losing the Done listener — while the
         // dedup resource still thinks the registration succeeded.
         app.register_transition::<Done>();
+
+        // Install everything registered via inventory (derived GearboxMessage,
+        // #[state_component], #[state_bridge]). Must run after `add_schedule`
+        // so the GearboxSchedule entry these listeners target already exists.
+        crate::registration::run_auto_installers(app);
 
         #[cfg(feature = "gauge")]
         {

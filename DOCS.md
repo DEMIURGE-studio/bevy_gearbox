@@ -86,13 +86,13 @@ pub struct Land {
 ```
 
 Deriving `GearboxMessage` also auto-registers the type through `inventory`.
-Install every derived message's listener with one plugin:
 
 ```rust
-app.add_plugins((GearboxPlugin::default(), gearbox_auto_register_plugin));
+app.add_plugins(GearboxPlugin::default());
 ```
 
-(Or register types individually with `app.register_transition::<Jump>()`.)
+Generic message types can't be auto-registered through `inventory`. Register
+those explicitly with `app.register_transition::<Jump>()`.
 
 Then write messages from any system - an input system fires `Jump`, a physics
 system fires `Land`:

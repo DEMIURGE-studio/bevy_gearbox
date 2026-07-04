@@ -19,12 +19,8 @@ use bevy::prelude::*;
 use bevy::scene::prelude::{bsn, CommandsSceneExt};
 use bevy_gearbox::prelude::*;
 use bevy_gearbox::server::{ServerPlugin, StateMachineId};
-use bevy_gearbox::{gearbox_auto_register_plugin, GearboxPlugin};
+use bevy_gearbox::GearboxPlugin;
 
-// Four messages, each addressed to the machine root via `#[gearbox(target)]`.
-// The derive also auto-registers each type through `inventory`, so
-// `gearbox_auto_register_plugin` installs their listeners with no manual
-// `register_transition::<M>()` calls.
 #[derive(Message, Clone, Reflect, GearboxMessage)]
 struct Crouch {
     #[gearbox(target)]
@@ -56,7 +52,7 @@ struct WeaponText;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins((GearboxPlugin::default(), gearbox_auto_register_plugin))
+        .add_plugins(GearboxPlugin::default())
         .add_plugins(ServerPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, input.before(GearboxSet))

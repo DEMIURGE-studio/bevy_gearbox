@@ -23,7 +23,7 @@ use bevy::prelude::*;
 use bevy::scene::prelude::{bsn, CommandsSceneExt};
 use bevy_gearbox::prelude::*;
 use bevy_gearbox::server::{ServerPlugin, StateMachineId};
-use bevy_gearbox::{gearbox_auto_register_plugin, GearboxPlugin};
+use bevy_gearbox::GearboxPlugin;
 
 /// Fires the ability: `Ready -> Invoking`. Addressed to the machine root.
 #[derive(Message, Clone, Reflect, GearboxMessage)]
@@ -48,7 +48,7 @@ const COOLDOWN: Color = Color::srgb(0.9, 0.3, 0.3);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins((GearboxPlugin::default(), gearbox_auto_register_plugin))
+        .add_plugins(GearboxPlugin::default())
         // Lets the gearbox editor connect at 127.0.0.1:15703. Remove this line
         // to run without the editor server.
         .add_plugins(ServerPlugin::default())

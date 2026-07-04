@@ -33,7 +33,6 @@ pub trait RegistrationAppExt {
     fn register_transition<M: GearboxMessage>(&mut self) -> &mut Self;
     fn register_state_component<T: Component<Mutability = Mutable> + Clone + 'static>(&mut self) -> &mut Self;
     fn register_state_bridge<S: States + bevy::state::state::FreelyMutableState + Default + Component + Clone + 'static>(&mut self) -> &mut Self;
-    fn run_auto_installers(&mut self);
 }
 
 /// Helper macro for dedup boilerplate.
@@ -84,17 +83,14 @@ impl RegistrationAppExt for App {
         self.add_systems(Update, bridge_to_bevy_state::<S>.after(GearboxSet));
         self
     }
-
-    fn run_auto_installers(&mut self) {
-        for i in inventory::iter::<TransitionInstaller> { (i.install)(self); }
-        for i in inventory::iter::<StateInstaller> { (i.install)(self); }
-        for i in inventory::iter::<StateBridgeInstaller> { (i.install)(self); }
-    }
 }
 
-/// Function-style plugin to run inventory-based auto-registrations.
-pub fn gearbox_auto_register_plugin(app: &mut App) {
-    app.run_auto_installers();
+/// Run every inventory-submitted registration: derived [`GearboxMessage`]
+/// transitions, `#[state_component]` types, and `#[state_bridge]` types.
+pub(crate) fn run_auto_installers(app: &mut App) {
+    for i in inventory::iter::<TransitionInstaller> { (i.install)(app); }
+    for i in inventory::iter::<StateInstaller> { (i.install)(app); }
+    for i in inventory::iter::<StateBridgeInstaller> { (i.install)(app); }
 }
 
 // ---------------------------------------------------------------------------

@@ -108,6 +108,12 @@ state is active. `StateComponent` isn't `Default`, so insert it through a
 `template` closure:
 
 ```rust
+use bevy_gearbox::prelude::*;
+
+#[state_component]
+#[derive(Component)]
+struct Walking;
+
 #Walking template(|_| Ok(StateComponent(Walking)))
 // The `Walking` component appears on the machine root while this state is active.
 ```

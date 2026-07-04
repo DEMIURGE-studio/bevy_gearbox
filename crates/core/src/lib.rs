@@ -27,7 +27,6 @@
 pub mod commands;
 pub mod components;
 pub mod delay;
-pub mod edges;
 pub mod helpers;
 pub mod history;
 pub mod messages;

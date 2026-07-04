@@ -114,6 +114,8 @@ use bevy_gearbox::prelude::*;
 #[derive(Component)]
 struct Walking;
 
+// ...
+
 #Walking template(|_| Ok(StateComponent(Walking)))
 // The `Walking` component appears on the machine root while this state is active.
 ```

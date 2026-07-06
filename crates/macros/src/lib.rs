@@ -3,6 +3,11 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Item, Type};
 
+fn named(name: &str) -> proc_macro2::TokenStream {
+    let ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+    quote! { ::#ident }
+}
+
 fn gearbox_root() -> proc_macro2::TokenStream {
     match crate_name("bevy_diesel") {
         Ok(FoundCrate::Itself) => return quote! { ::bevy_diesel::gearbox },

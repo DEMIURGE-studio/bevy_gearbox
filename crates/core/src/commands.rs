@@ -45,7 +45,7 @@ impl SpawnSubstate for ChildSpawnerCommands<'_> {
 
 /// Extension trait for spawning transitions.
 #[deprecated(
-    note = "imperative state-machine authoring is superseded by `bsn!` scenes — author edges as `Transitions [ (Target(#X) MessageEdge::<M>::default()) ]`"
+    note = "imperative state-machine authoring is superseded by `bsn!` scenes — author edges as `Transitions [ (Target(#X) MessageEdge::<M>) ]`"
 )]
 pub trait SpawnTransition {
     type Out<'a>

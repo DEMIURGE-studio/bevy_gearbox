@@ -42,10 +42,10 @@ fn spawn_character(mut commands: Commands) {
         Substates [
             #Alive InitialState(#Standing) Substates [
                 #Standing Transitions [
-                    (Target(#Jumping) MessageEdge::<Jump>::default())
+                    (Target(#Jumping) MessageEdge::<Jump>)
                 ],
                 #Jumping Transitions [
-                    (Target(#Standing) MessageEdge::<Land>::default())
+                    (Target(#Standing) MessageEdge::<Land>)
                 ],
             ],
             #Dead,
@@ -155,7 +155,7 @@ pub struct Jumping;
 // In the scene, on the #Jumping state:
 #Jumping
     template(|_| Ok(StateComponent(Jumping)))
-    Transitions [ (Target(#Standing) MessageEdge::<Land>::default()) ]
+    Transitions [ (Target(#Standing) MessageEdge::<Land>) ]
 ```
 
 Now, while `Jumping` is active, the root carries a `Jumping` component, so a
@@ -280,7 +280,7 @@ source and its active children intact rather than exiting and re-entering:
 
 ```rust
 #Alive InitialState(#Standing) Transitions [
-    (Target(#Alive) MessageEdge::<Attacked>::default() EdgeKind::Internal)
+    (Target(#Alive) MessageEdge::<Attacked> EdgeKind::Internal)
 ] Substates [ /* Standing, Jumping ... */ ]
 ```
 

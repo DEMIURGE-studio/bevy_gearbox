@@ -53,7 +53,7 @@ fn spawn_machine(mut commands: Commands) {
         StateMachine InitialState(#Ready)
         Substates [
             #Ready Transitions [
-                (Target(#Active) MessageEdge::<Activate>::default())
+                (Target(#Active) MessageEdge::<Activate>)
             ],
             #Active Transitions [
                 (Target(#Ready) AlwaysEdge)
@@ -177,7 +177,7 @@ commands.entity(machine).init_state_machine(ready);
 commands.spawn_scene(bsn! {
     StateMachine InitialState(#Ready)
     Substates [
-        #Ready  Transitions [ (Target(#Active) MessageEdge::<Activate>::default()) ],
+        #Ready  Transitions [ (Target(#Active) MessageEdge::<Activate>) ],
         #Active Transitions [ (Target(#Ready) AlwaysEdge) ],
     ]
 });

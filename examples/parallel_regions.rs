@@ -90,18 +90,18 @@ fn setup(mut commands: Commands) {
             // A region with an `InitialState` is sequential: one child active.
             #Posture InitialState(#Standing) Substates [
                 #Standing Transitions [
-                    (Target(#Crouching) MessageEdge::<Crouch>::default())
+                    (Target(#Crouching) MessageEdge::<Crouch>)
                 ],
                 #Crouching Transitions [
-                    (Target(#Standing) MessageEdge::<Stand>::default())
+                    (Target(#Standing) MessageEdge::<Stand>)
                 ],
             ],
             #Weapon InitialState(#Holstered) Substates [
                 #Holstered Transitions [
-                    (Target(#Drawn) MessageEdge::<Draw>::default())
+                    (Target(#Drawn) MessageEdge::<Draw>)
                 ],
                 #Drawn Transitions [
-                    (Target(#Holstered) MessageEdge::<Holster>::default())
+                    (Target(#Holstered) MessageEdge::<Holster>)
                 ],
             ],
         ]

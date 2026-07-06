@@ -90,7 +90,7 @@ fn setup(mut commands: Commands) {
             StateMachine InitialState(#Ready)
         Substates [
             #Ready Transitions [
-                (Target(#Invoking) MessageEdge::<Fire>::default())
+                (Target(#Invoking) MessageEdge::<Fire>)
             ],
             #Invoking Transitions [
                 (Target(#Cooldown) AlwaysEdge Delay::from_secs_f32(0.2))

@@ -1,6 +1,23 @@
 use proc_macro::TokenStream;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Item, Type};
+
+fn gearbox_root() -> proc_macro2::TokenStream {
+    match crate_name("bevy_diesel") {
+        Ok(FoundCrate::Itself) => return quote! { ::bevy_diesel::gearbox },
+        Ok(FoundCrate::Name(name)) => {
+            let base = named(&name);
+            return quote! { #base::gearbox };
+        }
+        Err(_) => {}
+    }
+    match crate_name("bevy_gearbox") {
+        Ok(FoundCrate::Itself) => quote! { ::bevy_gearbox },
+        Ok(FoundCrate::Name(name)) => named(&name),
+        Err(_) => quote! { ::bevy_gearbox },
+    }
+}
 
 /// Derive macro that implements [`GearboxMessage`] for a message struct and
 /// auto-registers it with the gearbox schedule via `inventory`.
@@ -128,25 +145,30 @@ pub fn derive_gearbox_message(input: TokenStream) -> TokenStream {
         .into();
     };
 
+    let gearbox = gearbox_root();
     let validator_ty = match validator {
         Some(ty) => quote! { #ty },
-        None => quote! { bevy_gearbox::AcceptAll },
+        None => quote! { _gearbox::AcceptAll },
     };
 
     let expanded = quote! {
-        impl bevy_gearbox::GearboxMessage for #name {
-            type Validator = #validator_ty;
+        const _: () = {
+            use #gearbox as _gearbox;
 
-            fn target(&self) -> bevy::prelude::Entity {
-                self.#target_field
-            }
-        }
+            impl _gearbox::GearboxMessage for #name {
+                type Validator = #validator_ty;
 
-        bevy_gearbox::inventory::submit! {
-            bevy_gearbox::registration::TransitionInstaller {
-                install: bevy_gearbox::registration::register_transition::<#name>
+                fn target(&self) -> bevy::prelude::Entity {
+                    self.#target_field
+                }
             }
-        }
+
+            _gearbox::inventory::submit! {
+                _gearbox::registration::TransitionInstaller {
+                    install: _gearbox::registration::register_transition::<#name>
+                }
+            }
+        };
     };
 
     TokenStream::from(expanded)
@@ -170,14 +192,18 @@ pub fn state_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("#[state_component] supports only structs or enums"),
     };
 
+    let gearbox = gearbox_root();
     let expanded = quote! {
         #parsed
 
-        bevy_gearbox::inventory::submit! {
-            bevy_gearbox::registration::StateInstaller {
-                install: bevy_gearbox::registration::register_state_component::<#name>
+        const _: () = {
+            use #gearbox as _gearbox;
+            _gearbox::inventory::submit! {
+                _gearbox::registration::StateInstaller {
+                    install: _gearbox::registration::register_state_component::<#name>
+                }
             }
-        }
+        };
     };
     TokenStream::from(expanded)
 }
@@ -200,14 +226,18 @@ pub fn state_bridge(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("#[state_bridge] supports only structs or enums"),
     };
 
+    let gearbox = gearbox_root();
     let expanded = quote! {
         #parsed
 
-        bevy_gearbox::inventory::submit! {
-            bevy_gearbox::registration::StateBridgeInstaller {
-                install: bevy_gearbox::registration::register_state_bridge::<#name>
+        const _: () = {
+            use #gearbox as _gearbox;
+            _gearbox::inventory::submit! {
+                _gearbox::registration::StateBridgeInstaller {
+                    install: _gearbox::registration::register_state_bridge::<#name>
+                }
             }
-        }
+        };
     };
     TokenStream::from(expanded)
 }

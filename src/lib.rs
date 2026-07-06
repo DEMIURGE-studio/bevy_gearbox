@@ -1,3 +1,5 @@
+extern crate self as bevy_gearbox;
+
 pub use bevy_gearbox_core::*;
 
 // Derive macros

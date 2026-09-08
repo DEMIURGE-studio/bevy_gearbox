@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox_macros_impl"
-version = "0.8.1"
+version.workspace = true
 edition = "2021"
 description = "Implementation of the bevy_gearbox derive and attribute macros, reusable by crates that re-export bevy_gearbox"
 license = "MIT OR Apache-2.0"

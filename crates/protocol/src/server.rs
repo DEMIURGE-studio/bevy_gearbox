@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::net::SocketAddr;
 
-use bevy_gearbox as gearbox;
+use bevy_gearbox_core as gearbox;
 use crate::methods::{PROTOCOL_VERSION, EDITOR_MACHINE_GRAPH};
 use crate::methods::EDITOR_RESET_REGION;
 use crate::methods::EDITOR_CREATE_TRANSITION;

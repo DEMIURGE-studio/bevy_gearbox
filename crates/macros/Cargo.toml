@@ -1,6 +1,6 @@
 [package]
 name = "bevy_gearbox_macros"
-version = "0.8.1"
+version.workspace = true
 edition = "2021"
 description = "Derive and attribute macros for bevy_gearbox"
 license = "MIT OR Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["game-development", "development-tools::procedural-macro-helpers"]
 proc-macro = true
 
 [dependencies]
-bevy_gearbox_macros_impl = { version = "0.8.1", path = "../macros_impl" }
+bevy_gearbox_macros_impl.workspace = true
 proc-macro2 = "1.0"
 proc-macro-crate = "3"
 quote = "1.0"

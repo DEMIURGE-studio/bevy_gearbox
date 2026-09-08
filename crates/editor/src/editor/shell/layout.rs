@@ -100,7 +100,7 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                         let ctx = crate::editor::view::ViewBoardCtx {
                             edge_build: workspace.edge_build.clone(),
                             edge_menu: workspace.edge_menu.clone(),
-                            available_event_edges: workspace.available_event_edges.clone(),
+                            available_message_edges: workspace.available_message_edges.clone(),
                             preview_edges: workspace.preview_edges.clone(),
                             rename_inline: workspace.rename_inline.clone(),
                             delay_inline: workspace.delay_inline.clone(),

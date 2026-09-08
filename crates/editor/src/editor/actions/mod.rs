@@ -21,7 +21,7 @@ pub fn disconnect(store: &mut EditorStore) {
 }
 
 pub fn reconnect(store: &mut EditorStore) {
-    // For now, treat as full disconnect then connect with last endpoint if present
+    // Drop the session, then reconnect to the last endpoint if there is one.
     let endpoint = store.last_endpoint.clone();
     store.clear_session();
     store.connection = ConnectionState::Disconnected;
@@ -31,18 +31,11 @@ pub fn reconnect(store: &mut EditorStore) {
     }
 }
 
-pub fn refresh_index(store: &mut EditorStore, _filter: IndexFilter) {
-    store.index.is_loading = true;
-    // RPC list will populate here; leave empty for skeleton
-    store.index.is_loading = false;
+pub fn refresh_index(_store: &mut EditorStore, _filter: IndexFilter) {
+    // The index is filled asynchronously from discovery events.
 }
 
-#[allow(dead_code)]
-pub fn open_machine(_store: &mut EditorStore, _entity: EntityId) {
-    // Will perform fresh RPC and create an OpenDocument; skeleton only
-}
-
-// Events (request side) for Bevy 0.17 observers (trigger with commands.trigger(...))
+// Request events, handled by observers in `plugin.rs`.
 #[derive(Debug, Clone, Event)]
 pub struct ConnectRequested { pub endpoint: String }
 

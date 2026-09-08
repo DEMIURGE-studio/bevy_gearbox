@@ -64,14 +64,14 @@ fn build_parent_path(graph: &StateMachineGraph, id: &EntityId) -> String {
 }
 
 pub fn node_key(graph: &StateMachineGraph, id: &EntityId) -> String {
-    // Simplified variant without explicit state variant string for now
     let parent = graph.get_parent(id);
     let parent_path = match parent { Some(pid) => build_parent_path(graph, &pid), None => String::new() };
     let name = get_node_name(graph, id);
     format!("{}|{}", parent_path, name)
 }
 
-// Legacy key (pre-fix): exclude the immediate parent from parent_path.
+// Older sidecars keyed nodes with a parent path that omitted the immediate
+// parent. Lookups fall back to that key so those files still load.
 fn legacy_build_parent_path(graph: &StateMachineGraph, id: &EntityId) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut cur = Some(*id);

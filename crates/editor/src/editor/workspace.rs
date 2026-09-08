@@ -23,8 +23,8 @@ pub struct Workspace {
     pub edge_build: Option<EdgeBuildState>,
     /// Edge kind chooser menu (opened when user picks a valid target during build)
     pub edge_menu: Option<EdgeMenuState>,
-    /// Available EventEdge<T> variant display names; editor-only listing for the menu
-    pub available_event_edges: Vec<String>,
+    /// Available MessageEdge<T> variant display names; editor-only listing for the menu
+    pub available_message_edges: Vec<String>,
     /// Persisted UI-only previews of edges committed via the chooser
     pub preview_edges: Vec<PreviewEdge>,
     /// One-shot commit for creating a transition edge (doc-local)

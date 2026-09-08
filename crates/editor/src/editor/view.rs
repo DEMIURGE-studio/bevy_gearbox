@@ -34,7 +34,7 @@ pub struct DocEvents {
 pub struct ViewBoardCtx {
     pub edge_build: Option<EdgeBuildState>,
     pub edge_menu: Option<EdgeMenuState>,
-    pub available_event_edges: Vec<String>,
+    pub available_message_edges: Vec<String>,
     pub preview_edges: Vec<crate::editor::workspace::PreviewEdge>,
     pub rename_inline: Option<RenameInline>,
     pub delay_inline: Option<crate::editor::workspace::DelayInline>,
@@ -74,8 +74,6 @@ pub fn draw_doc_on_board(
     // Tick highlight animations and request repaint while animating
     let animating = doc.tick_highlights(0.92);
     if animating { ui.ctx().request_repaint(); }
-
-    // Scene provides stable ordering; no per-frame edge ordering needed
 
     // Construct NodeLayout from the prebuilt scene
     let mut layout = NodeLayout::new(
@@ -217,7 +215,7 @@ pub fn draw_doc_on_board(
                             _events.edge_build_clear = true;
                             menu_ui.close();
                         }
-                        for label in ctx.available_event_edges.clone().into_iter() {
+                        for label in ctx.available_message_edges.clone().into_iter() {
                             if menu_ui.button(&label).clicked() {
                                 _events.pending_edge_create = Some(crate::editor::workspace::PendingEdgeCreate { doc: doc_id, source: edge_menu.source, target: edge_menu.target, kind: label.clone() });
                                 _events.preview_edge_remove = Some(crate::editor::workspace::PreviewEdge { doc: doc_id, source: edge_menu.source, target: edge_menu.target });
@@ -386,14 +384,11 @@ pub fn draw_doc_on_board(
     // Draw graph if any
     if doc.graph.is_none() { _events.context_menu_selection = context_menu_selection; return _events; }
 
-    // Layout handled via NodeLayout above; legacy pre-draw sizing/clamp pass removed.
-
     // Single-pass layered draw using computed order
     let zoom = doc.transform.zoom;
     let font_px = (14.0 * zoom).clamp(6.0, 64.0);
     let font_id = egui::FontId::proportional(font_px);
     let pad = 8.0 * zoom;
-    // header height is derived from layout.header_rect; keep constant here only for sizing heuristics elsewhere if needed
 
     // Helpers for edge geometry
     let rect_from_inside_toward = |rect: egui::Rect, toward: egui::Pos2| -> egui::Pos2 {
@@ -543,11 +538,8 @@ pub fn draw_doc_on_board(
         );
     };
 
-    // Helper: see free function `is_direct_substate_of_parallel`
-
     for id in order.iter() {
         if let Some(sv) = doc.scene.states.get(id) {
-            // Debug: print classification and name when drawing as a state
             let is_container = !matches!(sv.kind, StateKind::Leaf);
             if is_container {
                 let rect_world = sv.rect;
@@ -664,7 +656,7 @@ pub fn draw_doc_on_board(
                     draw_initial_indicator(rect_screen);
                 }
             } else {
-                // Leaf state rendering (see container branch for shared helpers)
+                // Leaf state rendering
                 let rect_world = sv.rect;
                 let min = doc.transform.to_screen(rect_world.min);
                 let max = doc.transform.to_screen(rect_world.max);
@@ -989,8 +981,6 @@ pub fn draw_doc_on_board(
         }
     }
 
-    // (old extra sizing pass removed; handled above)
-    // (old extra sizing pass removed; handled above)
     // Edge-build interaction and preview rendering
     let mut _edge_cancel = false;
     let mut _open_edge_menu: Option<EdgeMenuState> = None;
@@ -1060,14 +1050,6 @@ pub fn draw_doc_on_board(
     if _edge_cancel { _events.edge_build_clear = true; _events.edge_menu_close = true; }
     if let Some(m) = _open_edge_menu.take() { _events.edge_menu_open = Some(m); }
     if _stop_dashed_build { _events.edge_build_clear = true; }
-    // When an edge-target is chosen but menu not necessarily open, draw solid preview until selection
-    if let Some(menu) = ctx.edge_menu.clone() {
-        if menu.doc == doc_id {
-            if let (Some(src_view), Some(dst_view)) = (doc.scene.states.get(&menu.source), doc.scene.states.get(&menu.target)) {
-                // draw solid preview omitted for brevity
-            }
-        }
-    }
     // Edge kind menu popup
     if let Some(menu) = ctx.edge_menu.clone() {
         if menu.doc == doc_id {
@@ -1086,7 +1068,7 @@ pub fn draw_doc_on_board(
                         }
                         menu_ui.separator();
                         egui::containers::ScrollArea::vertical().max_height(220.0).show(menu_ui, |menu_ui| {
-                            let mut items: Vec<String> = ctx.available_event_edges.clone();
+                            let mut items: Vec<String> = ctx.available_message_edges.clone();
                             if !filter_buf.trim().is_empty() {
                                 let q = filter_buf.to_lowercase();
                                 items.retain(|label| label.to_lowercase().contains(&q));
@@ -1107,11 +1089,10 @@ pub fn draw_doc_on_board(
                         }
                     });
                 });
-            // Persist search filter via events is a future step; skip persistence here for purity
             // Close the popup on outside click, with one-frame suppression right after opening
             if ui.input(|i| i.pointer.any_pressed()) {
                 if menu.just_opened {
-                    // one-frame suppression handled implicitly; no mutation to ctx
+                    // Ignore the click that opened the menu.
                 } else {
                     let pos_opt = ui.ctx().input(|i| i.pointer.hover_pos());
                     let inside = pos_opt.map(|p| popup.response.rect.contains(p)).unwrap_or(false);
@@ -1285,7 +1266,7 @@ fn draw_delay_inline_editor(
             events.delay_edit = Some(crate::editor::workspace::DelayInline { doc: doc_id, target: *target_id, text: buf });
         }
     } else {
-        // Fallback draw (should not be called when not editing, caller draws read-only text)
+        // Not editing: the caller paints the label.
         painter.text(text_pos, egui::Align2::CENTER_TOP, "", font_id.clone(), color);
     }
 }

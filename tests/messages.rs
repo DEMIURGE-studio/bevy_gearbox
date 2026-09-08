@@ -308,13 +308,10 @@ fn parallel_regions_each_fire_on_same_message() {
     );
 }
 
-/// Regression: a message written the same frame a `StateMachine` is spawned
-/// must still fire its transition. Previously `message_edge_listener` ran in
-/// `Update` before `GearboxSet`, which meant it saw an empty `active_leaves`
-/// on a freshly-added machine and dropped the message. The listener was
-/// moved into `GearboxSchedule::EdgeCheckPhase` so the per-frame loop
-/// resolves the init transition first and then re-runs the listener against
-/// a populated machine in a subsequent iteration.
+/// A message written the same frame a `StateMachine` is spawned must still
+/// fire its transition. `message_edge_listener` runs inside the
+/// `GearboxSchedule` loop, so the first iteration resolves the init
+/// transition and a later iteration sees the populated machine.
 #[test]
 fn message_in_same_frame_as_spawn_fires_transition() {
     let mut app = App::new();

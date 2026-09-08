@@ -160,7 +160,7 @@ impl StateMachineGraph {
     /// Returns a display label for either a state or an edge entity, derived from its components.
     /// Order of precedence:
     /// 1) Name text (if present)
-    /// 2) EventEdge<T> → T simple name, or "Always" for AlwaysEdge
+    /// 2) MessageEdge<T> → T simple name, or "Always" for AlwaysEdge
     /// 3) Fallback: the numeric entity id
     pub(crate) fn get_label_for(&self, id: &EntityId) -> String {
         if let Some(bag) = self.entity_data.get(id) {
@@ -171,7 +171,7 @@ impl StateMachineGraph {
         format!("{}", id.0)
     }
 
-    /// Returns the display name for a state entity (same precedence as get_label_for for now).
+    /// Returns the display name for a state entity (same precedence as `get_label_for`).
     pub(crate) fn get_display_name(&self, id: &EntityId) -> String { self.get_label_for(id) }
 
     /// Children derived from the per-entity component store (STATE_CHILDREN as array of ids).
@@ -327,9 +327,9 @@ pub(crate) fn choose_edge_label_bag(bag: &ComponentBag) -> String {
 
     // 2) Otherwise, prefer MessageEdge<T> → use inner T (simple name)
     let keys: HashSet<String> = bag.entries.keys().cloned().collect();
-    let mut event_edge_types: Vec<&String> = keys.iter().filter(|s| s.contains(c::MESSAGE_EDGE_SUBSTR)).collect();
-    event_edge_types.sort();
-    if let Some(ty) = event_edge_types.first() {
+    let mut message_edge_types: Vec<&String> = keys.iter().filter(|s| s.contains(c::MESSAGE_EDGE_SUBSTR)).collect();
+    message_edge_types.sort();
+    if let Some(ty) = message_edge_types.first() {
         let s = ty.as_str();
         if let (Some(start), Some(end)) = (s.find('<'), s.rfind('>')) {
             if end > start + 1 {

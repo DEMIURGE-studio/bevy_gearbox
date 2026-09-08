@@ -12,7 +12,8 @@ use crate::methods::EDITOR_RESET_REGION;
 use crate::methods::EDITOR_CREATE_TRANSITION;
 use std::collections::{HashMap, VecDeque};
 
-// StateMachineId was in the old core; define here until it's added to the new core.
+/// Stable, human-chosen identifier for a state machine. The editor uses it to
+/// locate the machine's layout sidecar (`assets/<id>.sm.ron`) and saved scene.
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct StateMachineId(pub String);
@@ -55,7 +56,7 @@ impl Plugin for ServerPlugin {
         // Register StateMachineId for reflection (scene serialization)
         app.register_type::<StateMachineId>();
 
-        // Register RPCs (+watch and convenience endpoints). Start minimal; extend as needed.
+        // Editor RPCs.
         register_editor_subscription_rpcs(app);
         register_editor_watch_rpcs(app);
         register_editor_file_rpcs(app);
@@ -72,7 +73,7 @@ impl Plugin for ServerPlugin {
 }
 
 // =========================
-// File RPCs (ported real behavior)
+// File RPCs
 // =========================
 #[derive(Deserialize)]
 struct SaveGraphParams { entity: Entity, path: String }
@@ -388,7 +389,7 @@ fn register_editor_file_rpcs(app: &mut App) {
 }
 
 // =========================
-// +watch RPCs (skeletons)
+// +watch RPCs
 // =========================
 #[derive(Deserialize)]
 struct MachineWatchParams {
@@ -400,7 +401,7 @@ struct MachineWatchParams {
 fn entity_to_bits(e: Entity) -> u64 { e.to_bits() }
 
 fn discovery_watch_handler(_in: In<Option<Value>>, world: &mut World) -> BrpResult<Option<Value>> {
-    // Minimal snapshot: list current machines with optional names
+    // Snapshot of the current machines with their optional names.
     let mut events: Vec<Value> = Vec::new();
     let mut q = world.query::<(Entity, &gearbox::StateMachine, Option<&Name>)>();
     for (e, _sm, name) in q.iter(world) {
@@ -527,7 +528,6 @@ fn register_editor_control_rpcs(app: &mut App) {
 // Protocol version RPC
 // =========================
 fn version_handler(_in: In<Option<Value>>, _world: &World) -> BrpResult {
-    // Single u32 version for now; expand to { min, max } if needed
     Ok(serde_json::json!({"version": 1u32}))
 }
 
@@ -540,7 +540,7 @@ fn register_version_rpc(app: &mut App) {
 }
 
 // =========================
-// Subscriptions (skeleton)
+// Subscriptions
 // =========================
 #[derive(Resource, Default)]
 struct Subscriptions { counts: std::collections::HashMap<Entity, u32> }
@@ -626,7 +626,7 @@ fn on_open_if_related_event(evt: On<crate::events::OpenIfRelated>, subs: Res<Sub
 }
 
 // =========================
-// Convenience editor RPCs (minimal)
+// Convenience editor RPCs
 // =========================
 #[derive(serde::Deserialize)]
 struct ResetRegionParams { root: Entity }
@@ -694,7 +694,7 @@ fn delete_subtree_handler(In(params): In<Option<Value>>, world: &mut World) -> B
     for s in to_delete_states.iter().copied() {
         if let Some(ts) = world.get::<gearbox::Transitions>(s) { for &e in ts.into_iter() { edges.insert(e); } }
     }
-    // Find incoming edges (Target no longer has a TargetedBy inverse)
+    // Incoming edges: scan every edge's Target.
     let mut q_edge_target = world.query::<(Entity, &gearbox::Target)>();
     let incoming: Vec<Entity> = q_edge_target.iter(world).filter(|(_, t)| delete_set.contains(&t.0)).map(|(e, _)| e).collect();
     edges.extend(incoming);
@@ -831,7 +831,7 @@ fn create_transition_handler(In(params): In<Option<Value>>, world: &mut World) -
         world.entity_mut(entity).insert(gearbox::AlwaysEdge);
         edge_label = "Always".to_string();
     } else {
-        // Find a reflected component registration for EventEdge<T> whose inner T simple name matches p.kind
+        // Find a reflected component registration for MessageEdge<T> whose inner T simple name matches p.kind
         use bevy::reflect::TypeRegistration;
         let reg_arc = world.resource::<AppTypeRegistry>().0.clone();
         let reg_read = reg_arc.read();
@@ -852,7 +852,7 @@ fn create_transition_handler(In(params): In<Option<Value>>, world: &mut World) -
             return Err(BrpError { code: error_codes::INVALID_PARAMS, message: format!("unknown event edge kind: {}", p.kind), data: None });
         };
 
-        // Insert the reflected EventEdge<T> component via ReflectComponent.
+        // Insert the reflected MessageEdge<T> component via ReflectComponent.
         // Use an empty DynamicStruct so from_reflect_with_fallback uses the reflected Default.
         if let Some(refl_comp) = registration.data::<bevy::ecs::reflect::ReflectComponent>() {
             let refl_comp_cloned = refl_comp.clone();
@@ -959,7 +959,7 @@ fn machine_graph_handler(In(params): In<Option<Value>>, world: &mut World) -> Br
         // Edges from this node
         if let Some(transitions) = q_transitions.get(world, cur).ok().flatten() {
             for edge in transitions.into_iter().copied() {
-                // Minimal edge fields: id/source/target and a few components as strings
+                // Edge fields: id/source/target plus a few components as strings.
                 let mut ecomps: BTreeMap<String, Value> = BTreeMap::new();
                 if let Some(t) = world.get::<gearbox::Target>(edge) {
                     ecomps.insert(crate::components::TARGET.to_string(), Value::String(t.0.to_bits().to_string()));

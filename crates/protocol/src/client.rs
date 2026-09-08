@@ -350,7 +350,7 @@ pub enum ClientMessage {
     GraphResult { id: u64, graph: serde_json::Value },
     SidecarFound { id: u64, text: String },
     SidecarMissing { id: u64 },
-    EventEdgeVariants { variants: Vec<String> },
+    MessageEdgeVariants { variants: Vec<String> },
 }
 
 async fn list_state_machines(client: &Client) -> Result<Vec<MachineSummary>, String> {
@@ -396,11 +396,11 @@ fn client_commands(
                 match ver {
                     Ok(_) => {
                         conn.state = ConnectionPhase::Connected;
-                        // Fetch registry schema and publish discovered EventEdge<T> variants
+                        // Fetch registry schema and publish discovered MessageEdge<T> variants
                         let client_cloned2 = client.clone();
                         if let Ok(schema) = rt.0.block_on(async move { client_cloned2.registry_schema().await }) {
-                            let variants = extract_event_edge_variants(&schema);
-                            if !variants.is_empty() { writer.write(ClientMessage::EventEdgeVariants { variants }); }
+                            let variants = extract_message_edge_variants(&schema);
+                            if !variants.is_empty() { writer.write(ClientMessage::MessageEdgeVariants { variants }); }
                         }
                     }
                     Err(_) => { conn.state = ConnectionPhase::Disconnected; }
@@ -946,9 +946,9 @@ fn version_check_startup(
 
 
 // =========================
-// Helper: extract EventEdge<T> variants from registry.schema
+// Helper: extract MessageEdge<T> variants from registry.schema
 // =========================
-fn extract_event_edge_variants(schema: &serde_json::Value) -> Vec<String> {
+fn extract_message_edge_variants(schema: &serde_json::Value) -> Vec<String> {
     fn collect_strings(v: &serde_json::Value, out: &mut Vec<String>) {
         match v {
             serde_json::Value::String(s) => out.push(s.clone()),

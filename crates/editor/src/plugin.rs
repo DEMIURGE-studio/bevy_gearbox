@@ -104,7 +104,7 @@ fn setup_watch_state(net_cmd: &mut MessageWriter<NetCommand>, id: u64) {
     });
 }
 
-/// Start minimal watch for an edge (currently Name only).
+/// Watch an edge's `Name`, `Delay` and `EdgeKind`.
 fn setup_watch_edge(net_cmd: &mut MessageWriter<NetCommand>, id: u64) {
     net_cmd.write(NetCommand::StartComponents {
         id,
@@ -347,8 +347,8 @@ fn poll_network(
             ClientMessage::SidecarMissing { .. } => {
                 processed += 1;
             }
-            ClientMessage::EventEdgeVariants { variants } => {
-                workspace.available_event_edges = variants.clone();
+            ClientMessage::MessageEdgeVariants { variants } => {
+                workspace.available_message_edges = variants.clone();
                 processed += 1;
             }
         }
@@ -443,15 +443,6 @@ fn poll_network(
                     .get(name_key)
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                // Debug: log entity name and full packet contents from watch
-                {
-                    let entity_label = name_opt.clone().unwrap_or_else(|| id.to_string());
-                    let packet = serde_json::json!({
-                        "id": id,
-                        "components": components.clone(),
-                        "removed": removed.clone(),
-                    });
-                }
                 // Drive active visualization from StateMachine component snapshots on the machine root
                 let sm_key = bevy_gearbox_protocol::components::STATE_MACHINE;
                 let mut pending_sm_active: Option<(Vec<EntityId>, Vec<EntityId>)> = None;
@@ -838,20 +829,6 @@ fn convert_wire_graph_to_state_machine_graph(
                         out.adjacency_out.insert(id, outs);
                     }
                 }
-                if let Some(in_v) = comps
-                    .get(bevy_gearbox_protocol::components::TARGETED_BY)
-                    .and_then(|v| v.as_array())
-                {
-                    let mut ins: Vec<EntityId> = Vec::new();
-                    for s in in_v.iter().filter_map(|vv| vv.as_str()) {
-                        if let Ok(u) = s.parse::<u64>() {
-                            ins.push(EntityId(u));
-                        }
-                    }
-                    if !ins.is_empty() {
-                        out.adjacency_in.insert(id, ins);
-                    }
-                }
             }
             out.nodes.insert(id, node);
             // Seed central component store for this node
@@ -895,6 +872,7 @@ fn convert_wire_graph_to_state_machine_graph(
                 // Derive and store a stable display label so sidecar edge keys can match
                 edge.display_label = Some(crate::model::choose_edge_label_bag(&edge.components));
             }
+            out.adjacency_in.entry(tgt).or_default().push(id);
             out.edges.insert(id, edge);
             // Seed central component store for this edge
             if let Some(comps) = e.get("components").and_then(|v| v.as_object()) {

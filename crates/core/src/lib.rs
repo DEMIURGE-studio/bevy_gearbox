@@ -46,7 +46,7 @@ use helpers::{compute_active_from_leaves, get_all_leaf_states};
 use resolve::PendingCount;
 
 // ---------------------------------------------------------------------------
-// Re-exports — preserve original public API
+// Re-exports
 // ---------------------------------------------------------------------------
 
 // Used by the code generated in `bevy_gearbox_macros_impl`.
@@ -55,7 +55,7 @@ pub use inventory;
 #[doc(hidden)]
 pub use bevy as __bevy;
 
-#[allow(deprecated)] // re-export still carries the deprecated authoring traits
+#[allow(deprecated)]
 pub use commands::{
     BuildEntityEvent, BuildTransition, GearboxCommandsExt, InitStateMachine, SpawnSubstate,
     SpawnTransition, TransitionBuilder, TransitionExt,
@@ -128,8 +128,6 @@ pub enum GearboxPhase {
     /// so that derived values are current before edge checks.
     #[cfg(feature = "gauge")]
     GaugeSync,
-    /// Deprecated: use [`EdgeDetectPhase`](Self::EdgeDetectPhase) instead.
-    EdgeCheckPhase,
 }
 
 // ---------------------------------------------------------------------------
@@ -347,12 +345,9 @@ impl Plugin for GearboxPlugin {
         );
         app.add_schedule(schedule);
 
-        // NOTE: `register_transition::<Done>` must come AFTER `add_schedule`.
-        // `register_transition` calls `add_systems(GearboxSchedule, ..)`,
-        // which lazily creates a `GearboxSchedule` entry if none exists. If
-        // called before `add_schedule`, that lazy entry gets clobbered by
-        // `add_schedule`'s `insert` — losing the Done listener — while the
-        // dedup resource still thinks the registration succeeded.
+        // `register_transition::<Done>` must come after `add_schedule`: it calls
+        // `add_systems(GearboxSchedule, ..)`, which would otherwise lazily create
+        // a schedule entry that `add_schedule` then replaces, dropping the listener.
         app.register_transition::<Done>();
 
         // Install everything registered via inventory (derived GearboxMessage,
@@ -417,9 +412,7 @@ impl Plugin for GearboxPlugin {
         //
         // Ticking delays before the loop means a delay that finishes this
         // frame gets its transition applied in the same frame, and any
-        // cascade it triggers resolves in the same frame too. Ticking after
-        // the loop (the old layout) would leak a one-frame latency on every
-        // delayed transition.
+        // cascade it triggers resolves in the same frame too.
         app.add_systems(
             outer,
             (

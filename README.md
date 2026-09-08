@@ -153,36 +153,6 @@ fn on_exit(mut removed: RemovedComponents<Active>) {
 - Reset edges (clear subtree state on transition)
 - Internal vs external transitions
 
-## Migrating from the builder API
-
-The imperative builder traits (`spawn_substate`, `spawn_transition`,
-`init_state_machine`, `build_transition_always`, `spawn_branch`, …) are
-**deprecated** and will be removed in the next major release. The
-`#[gearbox_message]` / `#[transition_message]` attribute macros have been
-**removed** - define messages with `#[derive(GearboxMessage)]`. Author machines
-as `bsn!` scenes instead.
-
-This is a restructuring, not a one-to-one swap. The complicated builder 
-collapses into a single `bsn` block. 
-
-```rust
-// Before - imperative builders:
-let ready  = commands.spawn_substate(machine, Name::new("Ready")).id();
-let active = commands.spawn_substate(machine, Name::new("Active")).id();
-commands.spawn_transition::<Activate>(ready, active);
-commands.spawn((Source(active), Target(ready), AlwaysEdge));
-commands.entity(machine).init_state_machine(ready);
-
-// After - one bsn! scene:
-commands.spawn_scene(bsn! {
-    StateMachine InitialState(#Ready)
-    Substates [
-        #Ready  Transitions [ (Target(#Active) MessageEdge::<Activate>) ],
-        #Active Transitions [ (Target(#Ready) AlwaysEdge) ],
-    ]
-});
-```
-
 ## Version Table
 
 | Bevy | Gearbox |

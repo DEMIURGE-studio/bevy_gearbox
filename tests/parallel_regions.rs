@@ -201,11 +201,9 @@ fn nested_sequential_then_parallel() {
 /// The machine entity itself can be a parallel root: omit `InitialState`
 /// from the machine and all of its children become active leaves.
 ///
-/// This is a regression test for the init system: previously
-/// `enqueue_machine_init` required `&InitialState` in its query and silently
-/// skipped any machine without one, even though a `StateMachine` with no
-/// `InitialState` is valid. Self-targeting the init transition resolves the
-/// machine entity as a parallel parent through the existing leaf-finder.
+/// `enqueue_machine_init` self-targets the init transition for a machine
+/// without `InitialState`, and the leaf-finder then treats the machine
+/// entity as a parallel parent.
 #[test]
 fn parallel_root_machine_activates_all_children() {
     let mut app = App::new();

@@ -1,29 +1,20 @@
-//! Spike: can the new Bevy 0.19 BSN system express the entity hierarchies that
-//! diesel currently builds imperatively with its `template_*` functions?
+//! Authoring gearbox state machines with `bsn!`.
 //!
-//! Validated against the REAL gearbox components, these tests exercise the
-//! mechanics the diesel→BSN mapping depends on:
+//! These tests cover the scene mechanics a chart relies on:
 //!
 //!   1. State tree via the `SubstateOf`/`Substates` relationship block.
 //!   2. `#Name` references resolving into entity-valued components
 //!      (`InitialState`, `Target`).
 //!   3. Transition entities via the `Source`/`Transitions` relationship block
-//!      (the `Source` back-reference is auto-set by the block).
-//!   4. Applying a scene onto a *pre-existing* entity — diesel templates take
-//!      `entity: Option<Entity>` and build onto it.
-//!   5. A full magic_missile-shaped chart authored in a single `bsn!` scope.
+//!      (the `Source` back-reference is set by the block).
+//!   4. Applying a scene onto a pre-existing entity with `apply_scene`.
+//!   5. A nested chart (sequential regions three levels deep, with an
+//!      ancestor-targeting edge) authored in a single `bsn!` scope.
 //!   6. Cross-scope references threaded through scene-function `EntityTemplate`
-//!      parameters — the composition seam (BSN name scopes are per-`bsn!`).
+//!      parameters (BSN name scopes are per-`bsn!`).
 //!
-//! Modeled on `bevy/examples/scene/bsn.rs`.
-//!
-//! Spike prerequisites (added to gearbox components for this to compile):
-//!   * `StateMachine`: `+ Clone`        (bsn! bare components need Default+Clone)
-//!   * `AlwaysEdge`:   `+ Default, Clone`
-//!   * `Target`, `InitialState`: `+ FromTemplate` (to accept `#Name` refs)
-//! `MessageEdge<M>` would likewise need `+ Clone` to be used directly in bsn!;
-//! these tests use `AlwaysEdge` because the edge structure (Source/Target/marker)
-//! is identical regardless of the trigger marker.
+//! The edges use `AlwaysEdge`; the structure (`Source`/`Target`/marker) is the
+//! same for `MessageEdge<M>`.
 
 use bevy::app::TaskPoolPlugin;
 use bevy::asset::AssetPlugin;
@@ -129,7 +120,7 @@ fn name_refs_resolve_initial_state_and_transition_target() {
     assert_eq!(world.entity(target).get::<Name>().unwrap().as_str(), "Invoking");
 }
 
-// 4. Apply a scene onto a pre-existing entity (diesel's `entity: Option<Entity>`).
+// 4. Apply a scene onto a pre-existing entity.
 #[test]
 fn apply_scene_onto_existing_entity() {
     let mut app = test_app();
@@ -150,7 +141,7 @@ fn apply_scene_onto_existing_entity() {
     assert_eq!(world.entity(subs[0]).get::<SubstateOf>().unwrap().0, entity);
 }
 
-// 5. Full magic_missile-shaped chart in a single bsn! scope.
+// 5. Nested chart in a single bsn! scope.
 //    Ability → {Ready, Invoking → Repeater → {Idle, Fire}, Cooldown}
 #[test]
 fn full_invoked_chart_single_scope() {
@@ -230,7 +221,7 @@ fn edge_kind_internal_lowers_bare() {
 
 // 6. Cross-scope references: BSN name scopes are per-bsn!, so a sub-scene cannot
 //    see the caller's `#Name`s directly. References are threaded as `EntityTemplate`
-//    parameters — this is the seam diesel's composition helpers would use.
+//    parameters; this is how reusable sub-scenes take their targets.
 #[test]
 fn cross_scope_reference_via_entity_template_param() {
     let mut app = test_app();

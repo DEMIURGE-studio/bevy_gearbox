@@ -183,10 +183,10 @@ fn different_state_components_swap_on_transition() {
 ///   │   └── A_child  (InitialState of A — active leaf when A is active)
 ///   └── B
 ///
-/// Transition: root → B (any-state edge, like IntoBag in survivors).
-/// Expected: Speed is removed because A is exited. Bug: Active was only
-/// removed from A_child (the leaf) and the root (the source), but NOT from
-/// A itself, so state_component_exit never fired for A.
+/// Transition: root → B (an any-state edge sourced at the root).
+/// Expected: Speed is removed because A is exited. Every state between the
+/// exited leaf and the transition source, A included, must lose `Active` so
+/// `state_component_exit` fires for it.
 #[test]
 fn root_sourced_transition_removes_state_component_from_intermediate_parent() {
     let mut app = App::new();

@@ -179,7 +179,7 @@ fn self_transition_exits_and_reenters() {
 
 /// A descendant -> ancestor self-transition (e.g. a repeater's `Fire -> Repeater`
 /// bounce) must re-fire `Changed<Active>` on the shared ancestor so that
-/// `Changed<Active>`-driven logic — like the diesel repeater tick — runs again.
+/// `Changed<Active>`-driven logic (such as a repeat counter) runs again.
 #[test]
 fn descendant_to_ancestor_self_transition_refires_changed_active() {
     let mut app = App::new();

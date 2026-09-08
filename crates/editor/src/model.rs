@@ -349,7 +349,7 @@ pub(crate) fn choose_edge_label_bag(bag: &ComponentBag) -> String {
 }
 
 /// Extract the simple type name from a potentially generic, fully-qualified path.
-/// e.g. `bevy_diesel::events::StartInvoke<bevy::math::Vec3>` → `StartInvoke`
+/// e.g. `my_game::events::Fire<bevy::math::Vec3>` → `Fire`
 fn simple_generic_name(s: &str) -> String {
     // Strip generic args: take everything before the first `<`
     let base = match s.find('<') {

@@ -1,10 +1,9 @@
-//! Tests that stress the *initialization* path specifically — matching the
-//! scenario in the survivors game where many items are spawned from a
-//! Startup system with queued commands, each getting their own state
-//! machine rooted in an `InBackpack` initial state. The user's symptom is
-//! that items entering `InBackpack` via the init path don't get their
-//! `StateComponent<InBackpack>` marker on the machine root, while items
-//! that go through a message-driven transition (EquipIt, UnequipIt) work.
+//! Tests that stress the *initialization* path: many entities spawned from
+//! one Startup system with queued commands, each getting its own state
+//! machine whose initial state carries a `StateComponent`. Every machine
+//! must end up with that marker on its root after the first update, both
+//! when it simply initializes and when a message-driven transition is
+//! written in the same frame it is spawned.
 
 use bevy::prelude::*;
 use bevy_gearbox::prelude::*;
@@ -53,9 +52,8 @@ fn single_item_spawned_via_commands_gets_state_component() {
     );
 }
 
-/// Stress: spawn SEVEN items in one Startup system (matching survivors'
-/// `spawn_starter_items`). Every item should end up with `InBag` on its
-/// root entity.
+/// Stress: spawn seven items in one Startup system. Every item should end
+/// up with `InBag` on its root entity.
 #[test]
 fn seven_items_spawned_same_frame_all_get_state_component() {
     let mut app = App::new();
@@ -96,8 +94,7 @@ fn seven_items_spawned_same_frame_all_get_state_component() {
 /// All six bagged items should end with `InBag` on their root; the seventh
 /// should end with `Equipped` on its root.
 ///
-/// This mirrors survivors' `spawn_starter_items`: six items stay in the
-/// bag and the starter wand is equipped immediately.
+/// Six items stay in the bag and the seventh is equipped immediately.
 #[test]
 fn six_items_stay_in_bag_one_gets_equipped() {
     #[derive(Message, Clone, Reflect, GearboxMessage)]
@@ -107,7 +104,7 @@ fn six_items_stay_in_bag_one_gets_equipped() {
     }
 
     #[derive(Resource)]
-    struct Wand(Entity);
+    struct Sword(Entity);
     #[derive(Resource)]
     struct BagItems(Vec<Entity>);
 
@@ -118,22 +115,22 @@ fn six_items_stay_in_bag_one_gets_equipped() {
     app.register_transition::<EquipIt>();
 
     app.add_systems(Startup, |mut commands: Commands| {
-        // Spawn the wand first and queue an EquipIt for it.
-        let wand = commands.spawn(Item).id();
-        commands.entity(wand).with_children(|parent| {
+        // Spawn the sword first and queue an EquipIt for it.
+        let sword = commands.spawn(Item).id();
+        commands.entity(sword).with_children(|parent| {
             let in_bag = parent
-                .spawn((SubstateOf(wand), StateComponent(InBag)))
+                .spawn((SubstateOf(sword), StateComponent(InBag)))
                 .id();
             let equipped = parent
-                .spawn((SubstateOf(wand), StateComponent(Equipped)))
+                .spawn((SubstateOf(sword), StateComponent(Equipped)))
                 .id();
             parent.spawn((Source(in_bag), Target(equipped), MessageEdge::<EquipIt>::default()));
             parent
                 .commands_mut()
-                .entity(wand)
+                .entity(sword)
                 .insert((StateMachine::new(), InitialState(in_bag)));
         });
-        commands.insert_resource(Wand(wand));
+        commands.insert_resource(Sword(sword));
 
         // Spawn six more items that just live in the bag.
         let mut bagged = Vec::new();
@@ -152,26 +149,26 @@ fn six_items_stay_in_bag_one_gets_equipped() {
         }
         commands.insert_resource(BagItems(bagged));
 
-        // Fire EquipIt for the wand. The message lands in the buffer before
+        // Fire EquipIt for the sword. The message lands in the buffer before
         // the gearbox schedule runs this frame.
         commands.queue(|world: &mut World| {
-            let wand = world.resource::<Wand>().0;
-            world.write_message(EquipIt { item: wand });
+            let sword = world.resource::<Sword>().0;
+            world.write_message(EquipIt { item: sword });
         });
     });
 
     app.update();
 
-    let wand = app.world().resource::<Wand>().0;
+    let sword = app.world().resource::<Sword>().0;
     let bagged: Vec<Entity> = app.world().resource::<BagItems>().0.clone();
 
     assert!(
-        app.world().get::<Equipped>(wand).is_some(),
-        "wand should have Equipped marker"
+        app.world().get::<Equipped>(sword).is_some(),
+        "sword should have Equipped marker"
     );
     assert!(
-        app.world().get::<InBag>(wand).is_none(),
-        "wand should NOT still have InBag marker"
+        app.world().get::<InBag>(sword).is_none(),
+        "sword should NOT still have InBag marker"
     );
 
     for (idx, item) in bagged.iter().enumerate() {

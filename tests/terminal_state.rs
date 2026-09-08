@@ -1,19 +1,16 @@
-//! Tests for `TerminalState` and `Done` message flow, especially the
-//! scenarios that come up in diesel's ability/repeater templates where
-//! `Done` can be emitted from three different places:
+//! Tests for `TerminalState` and the `Done` message flow. `Done` can reach
+//! a parent's `MessageEdge<Done>` from three places:
 //!
-//! 1. Internally by `emit_terminal_done` in `EntryPhase` (when a `TerminalState`
-//!    gains `Active`) — same-frame delivery via `EdgeCheckPhase`.
-//! 2. Externally by a user system that runs in `Update` AFTER `GearboxSet`
-//!    (e.g. the diesel repeater writes `Done` when its counter exhausts).
-//!    Expected: next frame's schedule picks the message up.
-//! 3. The same pattern, but with a deep nested topology that matches the
-//!    magic-missile layout exactly: Ability root → Invoking → Repeater →
-//!    {Idle, Fire}, with Fire → Repeater delayed bounce.
+//! 1. Internally, from `emit_terminal_done` when a `TerminalState` gains
+//!    `Active`; delivered within the same frame's schedule loop.
+//! 2. Externally, from a user system running in `Update` after `GearboxSet`
+//!    (a counter that writes `Done` when it exhausts); picked up by the next
+//!    frame's schedule.
+//! 3. The same, in a deeply nested topology: root → Invoking → Repeater →
+//!    {Idle, Fire}, with a delayed Fire → Repeater bounce.
 //!
-//! These tests should all pass on a correct implementation; they exist to
-//! catch regressions in the schedule ordering of `message_edge_listener`,
-//! `tick_delay_timers`, and the `Done` path specifically.
+//! They pin the schedule ordering of `message_edge_listener`,
+//! `tick_delay_timers`, and the `Done` path.
 
 use std::time::Duration;
 
@@ -128,9 +125,9 @@ fn external_custom_message_fires_transition_next_frame() {
     );
 }
 
-/// External writer: a `Done` message written from OUTSIDE the schedule
-/// (exactly like the diesel repeater writes it from `Update` after
-/// `GearboxSet`) must fire the parent's `Done` edge on the next update.
+/// External writer: a `Done` message written from outside the schedule
+/// (a user system in `Update` after `GearboxSet`) must fire the parent's
+/// `Done` edge on the next update.
 ///
 /// ```text
 /// machine
@@ -191,7 +188,7 @@ fn external_done_writer_fires_parent_transition_next_frame() {
 }
 
 /// External writer with a DEEP leaf: the active leaf is nested three levels
-/// below `Invoking`, mirroring the magic-missile topology (Invoking →
+/// below `Invoking`, mirroring the repeater topology (Invoking →
 /// Repeater → Idle). `message_edge_listener<Done>` must walk up from the
 /// leaf to reach `Invoking` and find the `Done` edge.
 ///
@@ -319,8 +316,8 @@ fn delayed_bounce_cycle_progresses() {
     );
 }
 
-/// Repeater-like scenario: a counter system (running in `Update` after
-/// `GearboxSet`, exactly like diesel's `repeater_tick`) watches for
+/// Repeater scenario: a counter system (running in `Update` after
+/// `GearboxSet`) watches for
 /// `Changed<Active>` on the `Repeater` state. On the first N "re-entries"
 /// (triggered by the Fire → Repeater delayed bounce), it does nothing; on
 /// the Nth entry with `remaining == 0` it writes `Done` to `Invoking`.

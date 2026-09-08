@@ -1,19 +1,15 @@
 [package]
-name = "bevy_gearbox_macros"
+name = "bevy_gearbox_macros_impl"
 version = "0.8.1"
 edition = "2021"
-description = "Derive and attribute macros for bevy_gearbox"
+description = "Implementation of the bevy_gearbox derive and attribute macros, reusable by crates that re-export bevy_gearbox"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DEMIURGE-studio/bevy_gearbox"
 homepage = "https://github.com/DEMIURGE-studio/bevy_gearbox"
 keywords = ["bevy", "macros", "state-machine", "gamedev"]
 categories = ["game-development", "development-tools::procedural-macro-helpers"]
 
-[lib]
-proc-macro = true
-
 [dependencies]
-bevy_gearbox_macros_impl = { version = "0.8.1", path = "../macros_impl" }
 proc-macro2 = "1.0"
-proc-macro-crate = "3"
 quote = "1.0"
+syn = { version = "2.0", features = ["full"] }

@@ -49,9 +49,11 @@ use resolve::PendingCount;
 // Re-exports — preserve original public API
 // ---------------------------------------------------------------------------
 
-// Re-export `inventory` so the attribute macros can submit registrations
+// Used by the code generated in `bevy_gearbox_macros_impl`.
 #[doc(hidden)]
 pub use inventory;
+#[doc(hidden)]
+pub use bevy as __bevy;
 
 #[allow(deprecated)] // re-export still carries the deprecated authoring traits
 pub use commands::{

@@ -9,3 +9,4 @@ tools/**/target
 **/*.rs.bk
 rustc-ice-*.txt
 Cargo.lock
+TODO.md

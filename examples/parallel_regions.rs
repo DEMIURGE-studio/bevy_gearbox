@@ -9,7 +9,8 @@
 //!
 //! The root has no `InitialState`, so it's a *parallel* parent: both regions are
 //! active at once and transition independently - drawing your weapon doesn't
-//! change your posture. On-screen text mirrors each region's current state.
+//! change your posture. Each leaf carries an `on(..)` entry observer that
+//! writes its region's on-screen label.
 //!
 //! ```sh
 //! cargo run --example parallel_regions
@@ -56,7 +57,6 @@ fn main() {
         .add_plugins(ServerPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, input.before(GearboxSet))
-        .add_systems(Update, update_region_labels.after(GearboxSet))
         .run();
 }
 
@@ -70,13 +70,13 @@ fn setup(mut commands: Commands) {
     ));
     commands.spawn((
         PostureText,
-        Text2d::new("Posture: Standing"),
+        Text2d::new(""),
         TextColor(Color::srgb(0.6, 0.8, 1.0)),
         Transform::from_xyz(0.0, 40.0, 0.0),
     ));
     commands.spawn((
         WeaponText,
-        Text2d::new("Weapon: Holstered"),
+        Text2d::new(""),
         TextColor(Color::srgb(1.0, 0.8, 0.6)),
         Transform::from_xyz(0.0, -40.0, 0.0),
     ));
@@ -84,25 +84,25 @@ fn setup(mut commands: Commands) {
     commands.spawn_scene(bsn! {
         // No `InitialState` on the root -> PARALLEL parent: every region runs.
         #Character
-            template(|_| Ok(StateMachineId::new("character")))
+            StateMachineId("character")
             StateMachine
         Substates [
             // A region with an `InitialState` is sequential: one child active.
             #Posture InitialState(#Standing) Substates [
-                #Standing Transitions [
-                    (Target(#Crouching) MessageEdge::<Crouch>)
-                ],
-                #Crouching Transitions [
-                    (Target(#Standing) MessageEdge::<Stand>)
-                ],
+                #Standing
+                    on(label::<PostureText>("Posture: Standing"))
+                    Transitions [ (Target(#Crouching) MessageEdge::<Crouch>) ],
+                #Crouching
+                    on(label::<PostureText>("Posture: Crouching"))
+                    Transitions [ (Target(#Standing) MessageEdge::<Stand>) ],
             ],
             #Weapon InitialState(#Holstered) Substates [
-                #Holstered Transitions [
-                    (Target(#Drawn) MessageEdge::<Draw>)
-                ],
-                #Drawn Transitions [
-                    (Target(#Holstered) MessageEdge::<Holster>)
-                ],
+                #Holstered
+                    on(label::<WeaponText>("Weapon: Holstered"))
+                    Transitions [ (Target(#Drawn) MessageEdge::<Draw>) ],
+                #Drawn
+                    on(label::<WeaponText>("Weapon: Drawn"))
+                    Transitions [ (Target(#Holstered) MessageEdge::<Holster>) ],
             ],
         ]
     });
@@ -132,25 +132,7 @@ fn input(
     }
 }
 
-/// Mirror each region's active leaf into its on-screen label (keyed off `Name`).
-fn update_region_labels(
-    q_entered: Query<&Name, Added<Active>>,
-    mut q_posture: Query<&mut Text2d, (With<PostureText>, Without<WeaponText>)>,
-    mut q_weapon: Query<&mut Text2d, (With<WeaponText>, Without<PostureText>)>,
-) {
-    for name in &q_entered {
-        match name.as_str() {
-            "Standing" | "Crouching" => {
-                if let Ok(mut text) = q_posture.single_mut() {
-                    text.0 = format!("Posture: {}", name.as_str());
-                }
-            }
-            "Holstered" | "Drawn" => {
-                if let Ok(mut text) = q_weapon.single_mut() {
-                    text.0 = format!("Weapon: {}", name.as_str());
-                }
-            }
-            _ => {}
-        }
-    }
+/// Entry action: write `text` into the label marked by `L`.
+fn label<L: Component>(text: &'static str) -> impl Fn(On<EnterState>, Single<&mut Text2d, With<L>>) + Clone {
+    move |_enter, mut label| label.0 = text.into()
 }

@@ -8,10 +8,22 @@ use crate::components::Active;
 #[derive(Component, Clone)]
 pub struct StateComponent<T: Component + Clone>(pub T);
 
+impl<T: Component + Clone + Default> Default for StateComponent<T> {
+    fn default() -> Self {
+        Self(T::default())
+    }
+}
+
 /// When added to a state entity, removes `T` from the machine root when this
 /// state is entered and restores the stored clone when this state is exited.
 #[derive(Component, Clone)]
 pub struct StateInactiveComponent<T: Component + Clone>(pub T);
+
+impl<T: Component + Clone + Default> Default for StateInactiveComponent<T> {
+    fn default() -> Self {
+        Self(T::default())
+    }
+}
 
 /// Insert `T` on the machine root when a state with `StateComponent<T>` is entered.
 pub fn state_component_enter<T: Component<Mutability = Mutable> + Clone>(

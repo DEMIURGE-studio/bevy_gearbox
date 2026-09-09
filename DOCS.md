@@ -148,18 +148,22 @@ tell what state it's in - for instance, to make your physics act on jumping
 characters. A `StateComponent` clones its payload onto the machine **root**
 while its state is active, and removes it when the state exits.
 
-Because `StateComponent` isn't `Default`, insert it through a `template`
-closure:
+Register the marker with `#[state_component]` and put `StateComponent::<T>` on
+the state:
 
 ```rust
-#[derive(Clone, Component)]
+#[state_component]
+#[derive(Component, Clone, Default)]
 pub struct Jumping;
 
 // In the scene, on the #Jumping state:
 #Jumping
-    template(|_| Ok(StateComponent(Jumping)))
+    StateComponent::<Jumping>
     Transitions [ (Target(#Standing) MessageEdge::<Land>) ]
 ```
+
+A payload that isn't `Default` is passed explicitly:
+`StateComponent::<Speed>(Speed(7.5))`.
 
 Now, while `Jumping` is active, the root carries a `Jumping` component, so a
 plain query finds jumping characters:
@@ -210,8 +214,8 @@ fn on_enter_jumping(enter: On<EnterState>, mut q_velocity: Query<&mut Velocity>)
     }
 }
 
-// Attach the observer to the #Jumping state entity, e.g. via a `template`:
-#Jumping template(|_| Ok(/* ... */))
+// Attach the observer to the #Jumping state entity from inside the scene:
+#Jumping on(on_enter_jumping)
 ```
 
 ### Automatic and timed transitions

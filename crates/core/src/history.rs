@@ -4,7 +4,8 @@ use bevy::prelude::*;
 /// Enables history behavior for a state. When a state with this component is
 /// exited and later re-entered, it restores previously active substates
 /// instead of following [`InitialState`](crate::InitialState).
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect, FromTemplate)]
+#[reflect(Component)]
 pub enum History {
     /// Remember only the direct children that were active when last exited.
     /// On re-entry, restore those children and follow normal drill-down from there.

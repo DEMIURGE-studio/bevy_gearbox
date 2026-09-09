@@ -17,6 +17,9 @@
 //! first survivor in list order is taken. The guardless `Hurt` edge is last,
 //! so it is the fallback.
 //!
+//! Each state has an `on(..)` entry observer that records its name for the
+//! on-screen label.
+//!
 //! A guard is a marker component on the edge (`Lethal`, `Heavy`) plus a system
 //! in `GearboxPhase::BlockerPhase`. Guards here read the hit's damage from the
 //! `Matched<Hit>` payload and the character's `Hitpoints`, the same
@@ -61,6 +64,10 @@ struct Heavy;
 
 const HEAVY: f32 = 30.0;
 
+/// Name of the state the character is currently in, for the label.
+#[derive(Resource, Default)]
+struct CurrentState(&'static str);
+
 #[derive(Component, Default, Clone)]
 struct Hitpoints {
     current: f32,
@@ -76,6 +83,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(GearboxPlugin::default())
         .add_plugins(ServerPlugin::default())
+        .init_resource::<CurrentState>()
         .add_systems(Startup, setup)
         .add_systems(Update, input.before(GearboxSet))
         .add_systems(Update, update_label.after(GearboxSet))
@@ -102,24 +110,24 @@ fn setup(mut commands: Commands) {
 
     commands.spawn_scene(bsn! {
         #Character
-            template(|_| Ok(StateMachineId::new("character")))
+            StateMachineId("character")
             Hitpoints { current: 100.0, max: 100.0 }
             StateMachine InitialState(#Alive)
         Substates [
             // Three candidates for the same message, in priority order.
             // The guardless edge is last: it is the fallback.
-            #Alive Transitions [
+            #Alive on(entered("Alive")) Transitions [
                 (Target(#Dead)      MessageEdge::<Hit> Lethal),
                 (Target(#Staggered) MessageEdge::<Hit> Heavy),
                 (Target(#Hurt)      MessageEdge::<Hit>),
             ],
-            #Hurt Transitions [
+            #Hurt on(entered("Hurt")) Transitions [
                 (Target(#Alive) AlwaysEdge Delay::from_secs_f32(0.4))
             ],
-            #Staggered Transitions [
+            #Staggered on(entered("Staggered")) Transitions [
                 (Target(#Alive) AlwaysEdge Delay::from_secs_f32(1.0))
             ],
-            #Dead Transitions [
+            #Dead on(entered("Dead")) Transitions [
                 (Target(#Alive) MessageEdge::<Revive>)
             ],
         ]
@@ -193,21 +201,16 @@ fn input(
     }
 }
 
-/// Show the active state and hitpoints (keyed off the entered state's `Name`).
+/// Entry action: remember which state was entered.
+fn entered(name: &'static str) -> impl Fn(On<EnterState>, ResMut<CurrentState>) + Clone {
+    move |_enter, mut current| current.0 = name
+}
+
+/// Show the current state and hitpoints.
 fn update_label(
-    q_entered: Query<&Name, Added<Active>>,
-    q_hp: Query<&Hitpoints, With<StateMachine>>,
-    mut q_text: Query<&mut Text2d, With<StatusText>>,
-    mut current: Local<String>,
+    current: Res<CurrentState>,
+    hp: Single<&Hitpoints, With<StateMachine>>,
+    mut text: Single<&mut Text2d, With<StatusText>>,
 ) {
-    for name in &q_entered {
-        match name.as_str() {
-            "Alive" | "Hurt" | "Staggered" | "Dead" => *current = name.to_string(),
-            _ => {}
-        }
-    }
-    let (Ok(hp), Ok(mut text)) = (q_hp.single(), q_text.single_mut()) else {
-        return;
-    };
-    text.0 = format!("{}   HP {:.0}/{:.0}", *current, hp.current, hp.max);
+    text.0 = format!("{}   HP {:.0}/{:.0}", current.0, hp.current, hp.max);
 }

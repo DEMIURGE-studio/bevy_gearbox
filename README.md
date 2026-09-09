@@ -107,21 +107,23 @@ struct Fire {
 ### State components
 
 Automatically insert/remove a component on the machine root based on which
-state is active. `StateComponent` isn't `Default`, so insert it through a
-`template` closure:
+state is active:
 
 ```rust
 use bevy_gearbox::prelude::*;
 
 #[state_component]
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct Walking;
 
 // ...
 
-#Walking template(|_| Ok(StateComponent(Walking)))
-// The `Walking` component appears on the machine root while this state is active.
+#Walking StateComponent::<Walking>
+// The `Walking` component appears on the machine root while this state is active,
+// so `Query<&Velocity, With<Walking>>` finds walking characters.
 ```
+
+For a payload that isn't `Default`, pass it: `StateComponent::<Speed>(Speed(7.5))`.
 
 ### Reacting to state changes
 

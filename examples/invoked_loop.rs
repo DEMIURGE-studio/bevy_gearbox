@@ -10,10 +10,11 @@
 //! └── Cooldown  --always, after 0.8s--> Ready
 //! ```
 //!
-//! The orb's color reflects the current state (green = Ready, yellow = Invoking,
-//! red = Cooldown). The gearbox editor can attach while this runs - the example
-//! serves the editor protocol on `127.0.0.1:15703`; open the editor and connect.
-//! Close the window to quit.
+//! Entry actions are `on(..)` observers attached to the state entities inside
+//! the scene: each state recolors the orb when entered, and `Invoking` also
+//! launches a projectile. The gearbox editor can attach while this runs - the
+//! example serves the editor protocol on `127.0.0.1:15703`; open the editor and
+//! connect. Close the window to quit.
 //!
 //! ```sh
 //! cargo run --example invoked_loop
@@ -54,10 +55,6 @@ fn main() {
         .add_plugins(ServerPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, fire_on_space.before(GearboxSet))
-        .add_systems(
-            Update,
-            (recolor_orb, launch_on_invoke).after(GearboxSet),
-        )
         .add_systems(Update, move_projectiles)
         .run();
 }
@@ -82,22 +79,23 @@ fn setup(mut commands: Commands) {
         Transform::from_translation(ORB_POS.extend(0.0)),
     ));
 
-    // The state machine. The root carries a name and an editor id so the editor
-    // can identify (and save) it.
+    // The state machine. `StateMachineId` lets the editor identify (and save) it.
+    // `on(..)` attaches an `EnterState` observer to the state: its entry action.
     commands.spawn_scene(bsn! {
         #Ability
-            template(|_| Ok(StateMachineId::new("ability")))
+            StateMachineId("ability")
             StateMachine InitialState(#Ready)
         Substates [
-            #Ready Transitions [
-                (Target(#Invoking) MessageEdge::<Fire>)
-            ],
-            #Invoking Transitions [
-                (Target(#Cooldown) AlwaysEdge Delay::from_secs_f32(0.2))
-            ],
-            #Cooldown Transitions [
-                (Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.8))
-            ],
+            #Ready
+                on(recolor(READY))
+                Transitions [ (Target(#Invoking) MessageEdge::<Fire>) ],
+            #Invoking
+                on(recolor(INVOKING))
+                on(launch_projectile)
+                Transitions [ (Target(#Cooldown) AlwaysEdge Delay::from_secs_f32(0.2)) ],
+            #Cooldown
+                on(recolor(COOLDOWN))
+                Transitions [ (Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.8)) ],
         ]
     });
 }
@@ -114,40 +112,22 @@ fn fire_on_space(
     }
 }
 
-/// Recolor the orb whenever the ability enters a new state (keyed off the
-/// state's `Name`).
-fn recolor_orb(
-    q_entered: Query<&Name, Added<Active>>,
-    mut q_orb: Query<&mut Sprite, With<Orb>>,
-) {
-    for name in &q_entered {
-        let color = match name.as_str() {
-            "Ready" => READY,
-            "Invoking" => INVOKING,
-            "Cooldown" => COOLDOWN,
-            _ => continue,
-        };
-        if let Ok(mut sprite) = q_orb.single_mut() {
-            sprite.color = color;
-        }
-    }
+/// Entry action: paint the orb with this state's color.
+fn recolor(color: Color) -> impl Fn(On<EnterState>, Single<&mut Sprite, With<Orb>>) + Clone {
+    move |_enter, mut orb| orb.color = color
 }
 
-/// When `Invoking` is entered, launch a projectile from the orb.
-fn launch_on_invoke(q_entered: Query<&Name, Added<Active>>, mut commands: Commands) {
-    for name in &q_entered {
-        if name.as_str() == "Invoking" {
-            commands.spawn((
-                Projectile,
-                Sprite {
-                    color: INVOKING,
-                    custom_size: Some(Vec2::new(28.0, 10.0)),
-                    ..default()
-                },
-                Transform::from_translation(ORB_POS.extend(0.0)),
-            ));
-        }
-    }
+/// Entry action for `Invoking`: launch a projectile from the orb.
+fn launch_projectile(_enter: On<EnterState>, mut commands: Commands) {
+    commands.spawn((
+        Projectile,
+        Sprite {
+            color: INVOKING,
+            custom_size: Some(Vec2::new(28.0, 10.0)),
+            ..default()
+        },
+        Transform::from_translation(ORB_POS.extend(0.0)),
+    ));
 }
 
 fn move_projectiles(

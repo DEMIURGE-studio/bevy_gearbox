@@ -25,27 +25,24 @@ impl StateMachine {
 ///
 /// Use `Added<Active>` to detect newly entered states and
 /// `RemovedComponents<Active>` to detect exits.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
 pub struct Active {
     /// The state machine root entity this state belongs to.
+    #[entities]
     pub machine: Entity,
 }
 
 /// Which child state to enter by default when a parent state is entered.
-#[derive(Component, FromTemplate)]
-pub struct InitialState(pub Entity);
+#[derive(Component, Reflect, FromTemplate)]
+#[reflect(Component)]
+pub struct InitialState(#[entities] pub Entity);
 
 /// Relationship: this state is a substate of another.
 #[derive(Component, Clone, PartialEq, Eq, Debug, Reflect, FromTemplate)]
 #[reflect(Component)]
 #[relationship(relationship_target = Substates)]
 pub struct SubstateOf(#[entities] pub Entity);
-
-impl FromWorld for SubstateOf {
-    fn from_world(_world: &mut World) -> Self {
-        SubstateOf(Entity::PLACEHOLDER)
-    }
-}
 
 /// Relationship target: children substates.
 #[derive(Component, Default, Debug, PartialEq, Eq)]
@@ -61,15 +58,10 @@ impl<'a> IntoIterator for &'a Substates {
 }
 
 /// Source state of a transition edge.
-#[derive(Component, Clone, PartialEq, Eq, Debug)]
+#[derive(Component, Clone, PartialEq, Eq, Debug, Reflect, FromTemplate)]
+#[reflect(Component)]
 #[relationship(relationship_target = Transitions)]
 pub struct Source(#[entities] pub Entity);
-
-impl FromWorld for Source {
-    fn from_world(_world: &mut World) -> Self {
-        Source(Entity::PLACEHOLDER)
-    }
-}
 
 /// Outbound edges from a state, in priority order.
 ///
@@ -93,8 +85,9 @@ impl<'a> IntoIterator for &'a Transitions {
 }
 
 /// Target state of a transition edge.
-#[derive(Component, FromTemplate)]
-pub struct Target(pub Entity);
+#[derive(Component, Reflect, FromTemplate)]
+#[reflect(Component)]
+pub struct Target(#[entities] pub Entity);
 
 /// Marker: this edge fires automatically when its source is active.
 #[derive(Component, Default, Clone, Reflect)]
@@ -112,7 +105,8 @@ pub enum EdgeKind {
 }
 
 /// Delayed transition: fire after `duration` elapses while the source is active.
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 pub struct Delay {
     pub duration: Duration,
 }
@@ -147,11 +141,12 @@ pub struct EdgeTimer(pub Timer);
 pub struct TerminalState;
 
 /// Marker to request reset of subtree(s) when an edge fires.
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ResetEdge(pub ResetScope);
 
 /// Which side of the transition to reset.
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, Reflect)]
 pub enum ResetScope {
     #[default]
     Source,

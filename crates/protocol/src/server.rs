@@ -14,12 +14,18 @@ use std::collections::{HashMap, VecDeque};
 
 /// Stable, human-chosen identifier for a state machine. The editor uses it to
 /// locate the machine's layout sidecar (`assets/<id>.sm.ron`) and saved scene.
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq, Eq)]
 #[reflect(Component)]
 pub struct StateMachineId(pub String);
 
 impl StateMachineId {
-    pub fn new(id: &str) -> Self {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+}
+
+impl From<&str> for StateMachineId {
+    fn from(id: &str) -> Self {
         Self(id.to_string())
     }
 }

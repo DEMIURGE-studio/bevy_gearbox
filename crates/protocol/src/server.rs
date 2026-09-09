@@ -81,6 +81,10 @@ fn serialize_scene(world: &World, scene: &bevy::world_serialization::DynamicWorl
     scene.serialize(&reg).map_err(|e| format!("serialize scene: {e}"))
 }
 
+/// Write `contents` to a sibling `.tmp` file, then move it over `path`, so a
+/// crash mid-write never leaves a truncated file behind. On Windows `rename`
+/// refuses to replace an existing file, so the old file is removed first; the
+/// swap itself is therefore not atomic there.
 fn atomic_write(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
     use std::fs;
     use std::io::Write;
@@ -90,16 +94,10 @@ fn atomic_write(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
         f.write_all(contents.as_bytes())?;
         f.flush()?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        fs::rename(&tmp, path)?;
-        Ok(())
+    if path.exists() {
+        fs::remove_file(path)?;
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = std::fs::remove_file(path);
-        std::fs::rename(&tmp, path)
-    }
+    fs::rename(&tmp, path)
 }
 
 fn collect_state_machine_entities(world: &mut World, root: Entity) -> Vec<Entity> {
@@ -767,13 +765,8 @@ fn make_parent_handler(In(params): In<Option<Value>>, world: &mut World) -> BrpR
         world.get::<gearbox::Substates>(p.target).and_then(|c| c.into_iter().next().copied())
     } else {
         // Spawn a child
-        let mut e = world.spawn_empty();
-        if let Some(name) = p.name.as_ref() { e.insert(Name::new(name.clone())); }
-        e.insert((
-            Name::new("New State"),
-            gearbox::SubstateOf(p.target)
-        ));
-        Some(e.id())
+        let name = p.name.clone().unwrap_or_else(|| "New State".to_string());
+        Some(world.spawn((Name::new(name), gearbox::SubstateOf(p.target))).id())
     };
     if let Some(cid) = child {
         world.entity_mut(p.target).insert(gearbox::InitialState(cid));
@@ -791,12 +784,8 @@ fn make_parallel_handler(In(params): In<Option<Value>>, world: &mut World) -> Br
     let mut has_child = false;
     if let Some(children) = world.get::<gearbox::Substates>(p.target) { if children.into_iter().next().is_some() { has_child = true; } }
     if !has_child {
-        let mut e = world.spawn_empty();
-        if let Some(name) = p.name.as_ref() { e.insert(Name::new(name.clone())); }
-        e.insert((
-            Name::new("New State"),
-            gearbox::SubstateOf(p.target)
-        ));
+        let name = p.name.clone().unwrap_or_else(|| "New State".to_string());
+        world.spawn((Name::new(name), gearbox::SubstateOf(p.target)));
     }
     // Remove InitialState to make parallel
     let mut parent = world.entity_mut(p.target);
@@ -1112,5 +1101,38 @@ mod tests {
             .unwrap();
         assert!(err.is_err(), "non-child rejected");
         assert_eq!(world.get::<gearbox::InitialState>(parent).map(|i| i.0), Some(child), "unchanged after rejection");
+    }
+
+    #[test]
+    fn atomic_write_overwrites_existing_file() {
+        let dir = std::env::temp_dir().join(format!("gearbox_atomic_write_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("chart.scn.ron");
+        atomic_write(&path, "first").unwrap();
+        atomic_write(&path, "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+        assert!(!path.with_extension("tmp").exists(), "temp file cleaned up");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn make_parent_and_make_parallel_keep_the_requested_child_name() {
+        let mut world = World::new();
+        let leaf = world.spawn_empty().id();
+        world
+            .run_system_once_with(make_parent_handler, Some(serde_json::json!({"target": leaf, "name": "Idle"})))
+            .unwrap()
+            .unwrap();
+        let initial = world.get::<gearbox::InitialState>(leaf).expect("became a parent").0;
+        assert_eq!(world.get::<Name>(initial).map(|n| n.as_str()), Some("Idle"));
+
+        let other = world.spawn_empty().id();
+        world
+            .run_system_once_with(make_parallel_handler, Some(serde_json::json!({"target": other, "name": "Region"})))
+            .unwrap()
+            .unwrap();
+        let mut q = world.query::<(&Name, &gearbox::SubstateOf)>();
+        let names: Vec<String> = q.iter(&world).filter(|(_, s)| s.0 == other).map(|(n, _)| n.to_string()).collect();
+        assert_eq!(names, ["Region"]);
     }
 }

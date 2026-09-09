@@ -49,6 +49,13 @@ released together.
 - `examples/guarded_transitions.rs`, a playable guards demo.
 - Crate-level documentation on every crate, `LICENSE-MIT` and `LICENSE-APACHE`.
 
+### Fixed
+
+- Editor server: saving a chart over an existing `.scn.ron` / `.sm.ron` failed
+  on Windows; re-saving now works.
+- Editor: "Make Parent" and "Make Parallel" kept the requested child name
+  instead of always producing "New State".
+
 ### Changed
 
 - Several always-edges on one state form an ordered list; one fires per parallel

@@ -7,15 +7,19 @@
 //!   reset_pending_count
 //!   TransitionPhase  <- resolve_transitions (skips blocked, inserts/removes Active)
 //!   apply_deferred
-//!   ExitPhase        <- user systems reacting to RemovedComponents<Active>
-//!   EntryPhase       <- user systems reacting to Added<Active>
+//!   ExitPhase        <- fire_exit_events (ExitState, deepest first),
+//!                       user systems reacting to RemovedComponents<Active>
+//!   apply_deferred   <- ExitState observers run
+//!   EntryPhase       <- fire_enter_events (EnterState, shallowest first),
+//!                       user systems reacting to Added<Active>
 //!   GaugeSync        <- (gauge feature) sync WriteBack + AttributeDerived
-//!   apply_deferred
+//!   apply_deferred   <- EnterState observers run
 //!   EdgeDetectPhase  <- emit_terminal_done, check_always_edges,
 //!                       propose_delayed_transitions, message_edge_listener::<M>
 //!                       (each proposes candidate TransitionMessages)
 //!   apply_deferred
-//!   BlockerPhase     <- user guard systems veto candidates (MessageMutator<TransitionMessage>)
+//!   BlockerPhase     <- check_state_guards and user guard systems veto
+//!                       candidates (MessageMutator<TransitionMessage>)
 //!   select_transitions <- keeps the best surviving candidate per group, fills BlockedEdges
 //!   apply_deferred
 //!   SideEffectPhase  <- user side-effect systems (read Matched<M>, check BlockedEdges)
@@ -26,14 +30,15 @@
 //! and then by [`Transitions`] order; blockers veto, and the first survivor is
 //! applied in the next iteration's `TransitionPhase`.
 //!
-//! After the schedule converges, [`EnterState`] / [`ExitState`] entity events
-//! are triggered for observer-based consumers.
+//! [`EnterState`] / [`ExitState`] entity events fire inside the loop, so a
+//! state passed through within one frame gets both, in statechart order.
 //!
 //! This is analogous to how Avian runs a physics schedule multiple times per frame.
 
 pub mod commands;
 pub mod components;
 pub mod delay;
+pub mod guards;
 pub mod helpers;
 pub mod history;
 pub mod messages;
@@ -68,10 +73,11 @@ pub use commands::{
     SpawnTransition, TransitionBuilder, TransitionExt,
 };
 pub use components::{
-    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InitialState, ResetEdge, ResetScope,
-    Source, StateMachine, StateMachineId, SubstateOf, Substates, Target, TerminalState,
-    Transitions,
+    Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InState, InitialState, NotInState,
+    ResetEdge, ResetScope, Source, StateMachine, StateMachineId, SubstateOf, Substates,
+    Target, TerminalState, Transitions,
 };
+pub use guards::check_state_guards;
 pub use history::{History, HistoryState};
 pub use messages::{
     emit_terminal_done, message_edge_listener, AcceptAll, Done, GearboxMessage, Matched,
@@ -113,10 +119,13 @@ pub enum GearboxPhase {
     /// updates [`StateMachine`], and inserts/removes [`Active`] components.
     TransitionPhase,
     /// User systems that react to states being exited.
-    /// Query `RemovedComponents<Active>` to detect exits.
+    /// Query `RemovedComponents<Active>` to detect exits. [`ExitState`]
+    /// entity events are triggered here and their observers run before
+    /// `EntryPhase`.
     ExitPhase,
     /// User systems that react to states being entered.
-    /// Query `Added<Active>` to detect entries.
+    /// Query `Added<Active>` to detect entries. [`EnterState`] entity events
+    /// are triggered here and their observers run before `EdgeDetectPhase`.
     EntryPhase,
     /// Syncs gauge [`WriteBack`](bevy_gauge::prelude::WriteBack) and
     /// [`AttributeDerived`](bevy_gauge::prelude::AttributeDerived) components
@@ -127,9 +136,9 @@ pub enum GearboxPhase {
     /// `Changed<Active>`, elapsed delays, message edges, terminal-done) and
     /// writes [`Matched`] messages.
     EdgeDetectPhase,
-    /// User guard systems run here. Use
-    /// [`MessageMutator<TransitionMessage>`] to set `blocked = true` on
-    /// candidates that should not be applied; a vetoed candidate falls
+    /// Guard systems run here: the built-in [`check_state_guards`] and your
+    /// own. Use [`MessageMutator<TransitionMessage>`] to set `blocked = true`
+    /// on candidates that should not be applied; a vetoed candidate falls
     /// through to the next one in its group.
     BlockerPhase,
     /// User side-effect systems run here. Read
@@ -330,6 +339,8 @@ impl Plugin for GearboxPlugin {
             .register_type::<Delay>()
             .register_type::<TerminalState>()
             .register_type::<ResetEdge>()
+            .register_type::<InState>()
+            .register_type::<NotInState>()
             .register_type::<History>();
 
         app.add_message::<TransitionMessage>()
@@ -406,10 +417,17 @@ impl Plugin for GearboxPlugin {
                 ApplyDeferred
                     .after(GearboxPhase::TransitionPhase)
                     .before(GearboxPhase::ExitPhase),
+                resolve::fire_exit_events.in_set(GearboxPhase::ExitPhase),
                 delay::cancel_delay_timers.in_set(GearboxPhase::ExitPhase),
+                // Run ExitState observers (and apply exit-phase commands)
+                // before anything reacts to entries.
+                ApplyDeferred
+                    .after(GearboxPhase::ExitPhase)
+                    .before(GearboxPhase::EntryPhase),
+                resolve::fire_enter_events.in_set(GearboxPhase::EntryPhase),
                 delay::start_delay_timers.in_set(GearboxPhase::EntryPhase),
-                // Flush deferred commands from Exit/Entry (e.g.
-                // StateComponent insert/remove) so they are visible to
+                // Run EnterState observers and flush entry-phase commands
+                // (e.g. StateComponent inserts) so they are visible to
                 // EdgeDetect (Changed<Active>).
                 ApplyDeferred
                     .after(GearboxPhase::EntryPhase)
@@ -424,6 +442,7 @@ impl Plugin for GearboxPlugin {
                 ApplyDeferred
                     .after(GearboxPhase::EdgeDetectPhase)
                     .before(GearboxPhase::BlockerPhase),
+                guards::check_state_guards.in_set(GearboxPhase::BlockerPhase),
                 // After blockers, pick one winner per candidate group and
                 // record every blocked edge.
                 resolve::select_transitions
@@ -437,9 +456,9 @@ impl Plugin for GearboxPlugin {
         );
 
         // Outer driver: detect new machines, tick delay timers (so elapsed
-        // delays are proposed in the loop's first iteration), run the loop,
-        // then flush entity events for observer users. A delay that finishes
-        // this frame is applied this frame, along with any cascade it starts.
+        // delays are proposed in the loop's first iteration), then run the
+        // loop. A delay that finishes this frame is applied this frame, along
+        // with any cascade it starts.
         app.add_systems(
             outer,
             (
@@ -450,12 +469,6 @@ impl Plugin for GearboxPlugin {
             )
                 .chain()
                 .in_set(GearboxSet),
-        );
-        app.add_systems(
-            outer,
-            resolve::flush_state_events
-                .in_set(GearboxSet)
-                .after(run_gearbox_schedule),
         );
     }
 }

@@ -142,11 +142,14 @@ pub(crate) fn select_transitions(
 // EnterState / ExitState entity events
 // ---------------------------------------------------------------------------
 
-/// Triggered on a state entity after the schedule converges.
-/// Use `On<EnterState>` observers on state entities to react.
+/// Triggered on a state entity when it is entered, inside the schedule loop
+/// in [`EntryPhase`](crate::GearboxPhase::EntryPhase). Ancestors are entered
+/// before their descendants. Use `On<EnterState>` observers on state
+/// entities to react.
 ///
-/// For schedule-phase or Update-phase systems, prefer querying
-/// [`Added<Active>`](crate::components::Active) instead.
+/// For systems, prefer querying [`Added<Active>`](crate::components::Active)
+/// from `EntryPhase` (or from `Update` after `GearboxSet` for the frame's
+/// net result).
 #[derive(EntityEvent, Clone, Debug)]
 pub struct EnterState {
     #[event_target]
@@ -154,11 +157,13 @@ pub struct EnterState {
     pub machine: Entity,
 }
 
-/// Triggered on a state entity after the schedule converges.
-/// Use `On<ExitState>` observers on state entities to react.
+/// Triggered on a state entity when it is exited, inside the schedule loop in
+/// [`ExitPhase`](crate::GearboxPhase::ExitPhase). Descendants are exited
+/// before their ancestors. Use `On<ExitState>` observers on state entities to
+/// react.
 ///
-/// For schedule-phase or Update-phase systems, prefer querying
-/// [`Active`] with `RemovedComponents`.
+/// For systems, prefer `RemovedComponents<Active>` from `ExitPhase` (or from
+/// `Update` after `GearboxSet` for the frame's net result).
 #[derive(EntityEvent, Clone, Debug)]
 pub struct ExitState {
     #[event_target]
@@ -166,28 +171,44 @@ pub struct ExitState {
     pub machine: Entity,
 }
 
-/// Flush system: triggers [`EnterState`] / [`ExitState`] as entity events
-/// from the [`Active`] component changes made during the schedule loop.
-/// Runs in [`Update`] after the schedule loop.
-pub(crate) fn flush_state_events(
-    q_newly_active: Query<(Entity, &Active), Added<Active>>,
+/// Triggers [`ExitState`] for every state that lost [`Active`] in this
+/// iteration's `TransitionPhase`, deepest first. A state passed through
+/// within one frame gets its exit event in the iteration that leaves it.
+pub(crate) fn fire_exit_events(
     mut removed: RemovedComponents<Active>,
     q_substate_of: Query<&SubstateOf>,
     q_machine: Query<(), With<StateMachine>>,
     mut commands: Commands,
 ) {
-    // Fire ExitState for states that lost Active this frame
-    for entity in removed.read() {
-        // Walk up SubstateOf to find the machine root
-        let machine = q_substate_of.root_ancestor(entity);
-        // Only fire if the root is actually a state machine
-        if q_machine.contains(machine) {
-            commands.trigger(ExitState { state: entity, machine });
-        }
+    let mut exited: Vec<(usize, Entity, Entity)> = removed
+        .read()
+        .filter_map(|state| {
+            let machine = q_substate_of.root_ancestor(state);
+            q_machine
+                .contains(machine)
+                .then(|| (q_substate_of.iter_ancestors(state).count(), state, machine))
+        })
+        .collect();
+    exited.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, state, machine) in exited {
+        commands.trigger(ExitState { state, machine });
     }
-    // Fire EnterState for states that gained Active this frame
-    for (state, active) in &q_newly_active {
-        commands.trigger(EnterState { state, machine: active.machine });
+}
+
+/// Triggers [`EnterState`] for every state that gained [`Active`] in this
+/// iteration's `TransitionPhase`, shallowest first.
+pub(crate) fn fire_enter_events(
+    q_entered: Query<(Entity, &Active), Added<Active>>,
+    q_substate_of: Query<&SubstateOf>,
+    mut commands: Commands,
+) {
+    let mut entered: Vec<(usize, Entity, Entity)> = q_entered
+        .iter()
+        .map(|(state, active)| (q_substate_of.iter_ancestors(state).count(), state, active.machine))
+        .collect();
+    entered.sort_by_key(|e| e.0);
+    for (_, state, machine) in entered {
+        commands.trigger(EnterState { state, machine });
     }
 }
 

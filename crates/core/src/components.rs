@@ -182,3 +182,18 @@ pub enum ResetScope {
     Target,
     Both,
 }
+
+/// Guard: the edge is taken only while the named state is active (the XState
+/// `stateIn` guard). Coordinates parallel regions, e.g. an edge in the weapon
+/// region that requires `InState(#Standing)` in the posture region. Vetoed by
+/// [`check_state_guards`](crate::guards::check_state_guards) in
+/// [`BlockerPhase`](crate::GearboxPhase::BlockerPhase).
+#[derive(Component, Clone, PartialEq, Eq, Debug, Reflect, FromTemplate)]
+#[reflect(Component)]
+pub struct InState(#[entities] pub Entity);
+
+/// Guard: the edge is taken only while the named state is inactive. The
+/// complement of [`InState`].
+#[derive(Component, Clone, PartialEq, Eq, Debug, Reflect, FromTemplate)]
+#[reflect(Component)]
+pub struct NotInState(#[entities] pub Entity);

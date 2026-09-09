@@ -4,6 +4,7 @@ pub use crate::components::{
     Source, Target, Transitions, AlwaysEdge, EdgeKind,
     Delay,
     ResetEdge, ResetScope,
+    InState, NotInState,
 };
 pub use crate::state_component::{
     StateComponent, StateInactiveComponent,

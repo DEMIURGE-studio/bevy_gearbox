@@ -203,8 +203,10 @@ app.add_systems(Update, (on_enter, on_exit).after(GearboxSet));
 ```
 
 **Observers** (`EnterState` / `ExitState` entity events). These are triggered
-on the state entity after the schedule converges, and carry the state and its
-machine root:
+on the state entity inside the gearbox schedule, in statechart order: exits
+deepest-first in `ExitPhase`, then entries shallowest-first in `EntryPhase`. A
+state passed through within one frame gets both. Each carries the state and
+its machine root:
 
 ```rust
 fn on_enter_jumping(enter: On<EnterState>, mut q_velocity: Query<&mut Velocity>) {
@@ -228,7 +230,10 @@ Not every edge needs a message.
   stays active - `Delay::from_secs_f32(0.8)` for a 0.8s cooldown.
 - A **`TerminalState`** emits a `Done` message addressed to its parent when
   entered, so a `MessageEdge::<Done>` on the parent can transition out once a
-  sub-chart finishes.
+  sub-chart finishes. A parallel state is done when every region has reached
+  a terminal state; its `Done` is addressed to the parallel state itself, and
+  nested parallel states cascade. `Done` only matches edges on the state it is
+  addressed to (or below it), never an ancestor's.
 
 ```rust
 #Ready Transitions [
@@ -332,6 +337,16 @@ fn hp_is_zero_guard(
 }
 
 app.add_systems(GearboxSchedule, hp_is_zero_guard.in_set(GearboxPhase::BlockerPhase));
+```
+
+Two guards are built in. `InState(#Other)` vetoes the edge unless that state
+is active, and `NotInState(#Other)` unless it is inactive (XState's `stateIn`).
+They are how one parallel region reads another, with no Rust:
+
+```rust
+#Holstered Transitions [
+    (Target(#Drawn) MessageEdge::<Draw> InState(#Standing)),  // only while standing
+],
 ```
 
 The same rule applies to `AlwaysEdge` lists and to delayed edges: two

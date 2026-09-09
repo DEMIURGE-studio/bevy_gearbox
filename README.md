@@ -164,11 +164,12 @@ fn on_enter(q_entered: Query<(Entity, &Active), Added<Active>>) {
 - Shallow and deep history
 - Message-driven transitions with per-edge validators
 - Guarded transitions: ordered candidates, first passing guard wins, guardless fallback
+- Built-in `InState` / `NotInState` guards for coordinating parallel regions
 - Always-edges (automatic transitions on entry) and delayed edges (timer-based), both guardable
-- Terminal states that emit `Done` to their parent
+- Terminal states that emit `Done` to their parent; a parallel state is done when every region is
 - Side effects with payloads via `Matched<M>`, skipped for vetoed transitions
 - State components (auto insert/remove on the machine root)
-- Entry/exit observers (`EnterState` / `ExitState`) and `Added<Active>` queries
+- Entry/exit observers (`EnterState` / `ExitState`, fired in statechart order inside the schedule) and `Added<Active>` queries
 - Reset edges (clear history under a subtree on transition)
 - Internal vs external transitions
 - Bridge to Bevy `States` (`#[state_bridge]`)

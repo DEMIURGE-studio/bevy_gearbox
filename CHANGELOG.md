@@ -33,6 +33,16 @@ released together.
   runtime; `server` gates the file scanning. Depend with
   `default-features = false` and pick a side. The `BRP_URL` environment
   variable is no longer read; use `GEARBOX_PROTOCOL_URL`.
+- **A message addressed to a substate only reaches that subtree.** Edges on
+  the addressed state and its descendants are considered; ancestors' edges are
+  not. Address the machine root (the usual case) to offer a message to every
+  active state. This is what makes `Done` land on the one state that finished.
+- **`EnterState` / `ExitState` fire inside the gearbox schedule**, in
+  `ExitPhase` and `EntryPhase`, rather than once after it converges. A state
+  passed through within one frame now gets both events, exits come
+  deepest-first and entries shallowest-first, and exit observers run before
+  entry observers. Observers that assumed the frame had settled should move
+  their logic to a system after `GearboxSet`.
 
 ### Added
 
@@ -41,6 +51,13 @@ released together.
   `History::Deep`, `ResetEdge(ResetScope::Target)` and `Source(#X)` all work
   directly, with no `template(..)` closures.
 - `GearboxPlugin` is exported from the prelude.
+- **Parallel completion.** A parallel state is done when every region has
+  reached a `TerminalState`: `Done` is addressed to the parallel state so its
+  own `MessageEdge<Done>` fires, and nested parallel states cascade. Before,
+  one finished region fired the parent's `Done` edge.
+- **`InState(#Other)` / `NotInState(#Other)` guards** on an edge, vetoed by a
+  built-in blocker while the named state is inactive / active (XState's
+  `stateIn`). Authorable in `bsn!` with no Rust.
 - `bevy_gearbox_macros_impl`: lets a crate that re-exports gearbox offer
   `#[derive(GearboxMessage)]`, `#[state_component]` and `#[state_bridge]` under
   its own path, so its users need no direct `bevy_gearbox` dependency.

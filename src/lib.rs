@@ -35,8 +35,9 @@
 //! Transitions fire in response to Bevy messages ([`GearboxMessage`]), on entry
 //! ([`AlwaysEdge`]), after a [`Delay`], or when a [`TerminalState`] finishes.
 //! Guards are marker components on edges plus systems in
-//! [`GearboxPhase::BlockerPhase`]; several edges for one trigger are tried in
-//! [`Transitions`] order and the first survivor wins. React to state changes
+//! [`GearboxPhase::BlockerPhase`] ([`InState`] and [`NotInState`] are built
+//! in); several edges for one trigger are tried in [`Transitions`] order and
+//! the first survivor wins. React to state changes
 //! with `Added<Active>` queries, [`EnterState`] / [`ExitState`] observers, or a
 //! [`StateComponent`] that mirrors a state onto the machine root.
 //!

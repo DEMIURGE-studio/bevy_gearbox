@@ -1,11 +1,5 @@
 use crate::types::EntityId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DocId(pub EntityId);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TabId(pub EntityId);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionState {
     Disconnected,
@@ -34,10 +28,6 @@ pub struct StateMachineIndex {
     pub filter: IndexFilter,
     pub is_loading: bool,
     pub error: Option<String>,
-    pub last_fetched_at: Option<u64>,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DocMode { Live, Draft }
 
 

@@ -23,7 +23,7 @@ State machines are useful everywhere in games - AI behavior, ability lifecycles,
 - **Parallel by construction.** Resolution runs in a dedicated schedule, so your guards and side effects are ordinary Bevy systems and run in parallel like any other.
 - **Message-driven.** Trigger transitions by writing Bevy messages. Read the matched payload in a side-effect phase to apply damage, spend a resource, or fire the next message.
 - **Data-driven.** Author a whole chart as one `bsn!` scene. Save and load it as a Bevy scene, or edit it while the game runs.
-- **Visual editor.** Build, edit, and monitor state machines in a running game over the Bevy Remote Protocol.
+- **Visual editor.** Build, edit, and monitor state machines in a running game over the Bevy Remote Protocol. A development tool: the `server` feature opens an HTTP server on loopback and can read and write files under the game's `assets/`, so enable it in dev builds only.
 
 <p align="center">
   <img width="600" src="assets/editor_demo.webp">

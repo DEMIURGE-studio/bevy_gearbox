@@ -25,7 +25,7 @@ pub struct ServerPlugin {
     /// Extra HTTP headers the remote server requires on every request
     /// (forwarded to `RemoteHttpPlugin::with_headers`).
     pub headers: Vec<(String, String)>,
-    /// Address to listen on. Defaults to `127.0.0.1:15703`.
+    /// Address to listen on. Defaults to [`crate::DEFAULT_ADDRESS`].
     pub bind_address: Option<SocketAddr>,
 }
 
@@ -33,7 +33,7 @@ impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         // Install Bevy Remote HTTP server
         let mut http = {
-            let addr = self.bind_address.unwrap_or_else(|| "127.0.0.1:15703".parse().expect("bind addr"));
+            let addr = self.bind_address.unwrap_or_else(|| crate::DEFAULT_ADDRESS.parse().expect("bind addr"));
             bevy::remote::http::RemoteHttpPlugin::default()
                 .with_address(addr.ip())
                 .with_port(addr.port())

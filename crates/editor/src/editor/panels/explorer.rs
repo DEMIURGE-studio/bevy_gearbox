@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
-use crate::editor::model::store::EditorStore;
+use crate::editor::session::store::EditorStore;
 use crate::editor::actions::{OpenRequested, CloseRequested};
-use crate::editor::docs::Docs;
+use crate::editor::open_docs::Docs;
 
 pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands, docs: &Docs) {
     ui.horizontal(|ui| {
@@ -19,7 +19,7 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
 
     egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
         let query = store.index.filter.query.trim().to_lowercase();
-        let mut filtered: Vec<crate::editor::model::types::IndexItem> = store.index.items.iter().cloned().filter(|it| {
+        let mut filtered: Vec<crate::editor::session::types::IndexItem> = store.index.items.iter().cloned().filter(|it| {
             if query.is_empty() { return true; }
             let name = it.name.as_deref().unwrap_or("");
             let id_text = it.entity.to_string();
@@ -27,8 +27,8 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
         }).collect();
 
         // Partition into open first, then closed
-        let mut open_items: Vec<crate::editor::model::types::IndexItem> = Vec::new();
-        let mut closed_items: Vec<crate::editor::model::types::IndexItem> = Vec::new();
+        let mut open_items: Vec<crate::editor::session::types::IndexItem> = Vec::new();
+        let mut closed_items: Vec<crate::editor::session::types::IndexItem> = Vec::new();
         for it in filtered.drain(..) {
             if open_ids.contains(&it.entity) { open_items.push(it); } else { closed_items.push(it); }
         }

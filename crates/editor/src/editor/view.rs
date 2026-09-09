@@ -16,11 +16,9 @@ pub struct DocEvents {
     pub edge_menu_close: bool,
     pub pending_edge_create: Option<crate::editor::workspace::PendingEdgeCreate>,
     pub preview_edge_remove: Option<crate::editor::workspace::PreviewEdge>,
-    pub rename_start: Option<RenameInline>,
     pub rename_edit: Option<RenameInline>,
     pub rename_commit: Option<RenameInline>,
     pub rename_cancel: Option<(EntityId, EntityId)>,
-    pub set_edge_delay: Option<(EntityId, EntityId, f32)>,
     pub clear_edge_delay: Option<(EntityId, EntityId)>,
     // Inline delay editing lifecycle
     pub delay_start: Option<crate::editor::workspace::DelayInline>,
@@ -321,60 +319,30 @@ pub fn draw_doc_on_board(
     // During drag: move draggable in world coords, with clamping to parent content via NodeLayout
     // Drag delta consumed by shell for board-level background pan
     if response.dragged() {
-        // Only process movement for the owning document if there is an owner
-        if let Some(owner) = ctx.board_drag_owner {
-            if owner == doc_id {
-                if let (Some(ent), Some(anchor)) = (doc.dragging, doc.drag_anchor_world) {
-                    if let Some(cursor) = response.ctx.input(|i| i.pointer.hover_pos()) {
-                        let pointer_world = doc.transform.to_world(cursor);
-                        let desired_min = egui::pos2(pointer_world.x - anchor.x, pointer_world.y - anchor.y);
-                        if !doc.scene.edges.contains_key(&ent) {
-                                let _ = layout.move_node_clamped_and_propagate(ent, desired_min, &cfg);
-                                // Sync rects back to scene
-                                for (id, rect) in layout.node_rects.iter() { doc.set_rect(id, *rect); }
-                        } else {
-                                // Compute pill size in world from cached label size, set desired rect, then clamp via layout
-                                let label = doc.graph.as_ref().map(|g| g.get_label_for(&ent)).or_else(|| doc.scene.edges.get(&ent).map(|v| v.label.clone())).unwrap_or_default();
-                                let zoom = doc.transform.zoom;
-                                let size_s = doc.cached_label_size_screen(&label, zoom, &painter);
-                                let pad_s = egui::vec2(10.0 * zoom, 6.0 * zoom);
-                                let size_w = egui::vec2((size_s.x + 2.0 * pad_s.x) / zoom, (size_s.y + 2.0 * pad_s.y) / zoom);
-                                let rect = egui::Rect::from_min_size(desired_min, size_w);
-                                layout.node_rects.insert(ent, rect);
-                                layout.clamp_children_left_top(&cfg);
-                                // Sync rects back to scene
-                                for (id, rect) in layout.node_rects.iter() { doc.set_rect(id, *rect); }
-                        }
-                    }
-                } else {
-                    // Board-level background drag pan handled in shell/layout.rs
-                }
-            }
-        } else if let (Some(ent), Some(anchor)) = (doc.dragging, doc.drag_anchor_world) {
-            // No owner yet; allow initial movement for the doc that captured this frame
-            if let Some(cursor) = response.ctx.input(|i| i.pointer.hover_pos()) {
+        // Move only if this doc owns the board drag, or nobody has claimed it yet
+        // (the frame the drag started). Background pans are handled by the shell.
+        let may_move = ctx.board_drag_owner.map_or(true, |owner| owner == doc_id);
+        if may_move {
+            if let (Some(ent), Some(anchor), Some(cursor)) =
+                (doc.dragging, doc.drag_anchor_world, response.ctx.input(|i| i.pointer.hover_pos()))
+            {
                 let pointer_world = doc.transform.to_world(cursor);
                 let desired_min = egui::pos2(pointer_world.x - anchor.x, pointer_world.y - anchor.y);
                 if !doc.scene.edges.contains_key(&ent) {
-                        let _ = layout.move_node_clamped_and_propagate(ent, desired_min, &cfg);
-                        // Sync rects back to scene
-                        for (id, rect) in layout.node_rects.iter() { doc.set_rect(id, *rect); }
+                    let _ = layout.move_node_clamped_and_propagate(ent, desired_min, &cfg);
                 } else {
-                        // Compute pill size in world from cached label size, set desired rect, then clamp via layout
-                        let label = doc.graph.as_ref().map(|g| g.get_label_for(&ent)).or_else(|| doc.scene.edges.get(&ent).map(|v| v.label.clone())).unwrap_or_default();
-                        let zoom = doc.transform.zoom;
-                        let size_s = doc.cached_label_size_screen(&label, zoom, &painter);
-                        let pad_s = egui::vec2(10.0 * zoom, 6.0 * zoom);
-                        let size_w = egui::vec2((size_s.x + 2.0 * pad_s.x) / zoom, (size_s.y + 2.0 * pad_s.y) / zoom);
-                        let rect = egui::Rect::from_min_size(desired_min, size_w);
-                        layout.node_rects.insert(ent, rect);
-                        layout.clamp_children_left_top(&cfg);
-                        // Sync rects back to scene
-                        for (id, rect) in layout.node_rects.iter() { doc.set_rect(id, *rect); }
+                    // Pill: size from the cached label, then clamp via layout
+                    let label = doc.graph.as_ref().map(|g| g.get_label_for(&ent)).or_else(|| doc.scene.edges.get(&ent).map(|v| v.label.clone())).unwrap_or_default();
+                    let zoom = doc.transform.zoom;
+                    let size_s = doc.cached_label_size_screen(&label, zoom, &painter);
+                    let pad_s = egui::vec2(10.0 * zoom, 6.0 * zoom);
+                    let size_w = egui::vec2((size_s.x + 2.0 * pad_s.x) / zoom, (size_s.y + 2.0 * pad_s.y) / zoom);
+                    layout.node_rects.insert(ent, egui::Rect::from_min_size(desired_min, size_w));
+                    layout.clamp_children_left_top(&cfg);
                 }
+                // Sync rects back to scene
+                for (id, rect) in layout.node_rects.iter() { doc.set_rect(id, *rect); }
             }
-        } else {
-            // Board-level background drag pan handled in shell/layout.rs
         }
     }
 
@@ -552,15 +520,6 @@ pub fn draw_doc_on_board(
                 let base_fill = egui::Color32::from_rgb(30, 30, 35);
                 let base_yellow = egui::Color32::from_rgb(230, 200, 40);
                 let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
-                let lerp_color = |a: egui::Color32, b: egui::Color32, t: f32| -> egui::Color32 {
-                    let cl = |x: f32| -> u8 { x.clamp(0.0, 255.0) as u8 };
-                    let ta = t.clamp(0.0, 1.0);
-                    let inv = 1.0 - ta;
-                    let r = a.r() as f32 * inv + b.r() as f32 * ta;
-                    let g = a.g() as f32 * inv + b.g() as f32 * ta;
-                    let bch = a.b() as f32 * inv + b.b() as f32 * ta;
-                    egui::Color32::from_rgb(cl(r), cl(g), cl(bch))
-                };
                 painter.rect_filled(rect_screen, rounding, base_fill);
                 let header_rect_world = layout.header_rect(id, &cfg).unwrap_or(rect_world);
                 let header_rect = egui::Rect::from_min_max(doc.transform.to_screen(header_rect_world.min), doc.transform.to_screen(header_rect_world.max));
@@ -623,7 +582,7 @@ pub fn draw_doc_on_board(
                         rect_screen.min.y + (handle_r + margin),
                     );
                     let handle_rect = egui::Rect::from_center_size(handle_center, egui::vec2(handle_r * 2.0, handle_r * 2.0));
-                    let hid = egui::Id::new(("edge_handle", doc_id, "node")).with(*id);
+                    let hid = egui::Id::new(("edge_handle", doc_id, *id));
                     let hresp = ui.interact(handle_rect, hid, egui::Sense::click());
                     // Blue circle
                     painter.circle_filled(handle_center, handle_r, egui::Color32::from_rgb(110, 190, 255));
@@ -667,15 +626,6 @@ pub fn draw_doc_on_board(
                 let base_fill = egui::Color32::from_rgb(30, 30, 35);
                 let base_yellow = egui::Color32::from_rgb(230, 200, 40);
                 let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
-                let lerp_color = |a: egui::Color32, b: egui::Color32, t: f32| -> egui::Color32 {
-                    let cl = |x: f32| -> u8 { x.clamp(0.0, 255.0) as u8 };
-                    let ta = t.clamp(0.0, 1.0);
-                    let inv = 1.0 - ta;
-                    let r = a.r() as f32 * inv + b.r() as f32 * ta;
-                    let g = a.g() as f32 * inv + b.g() as f32 * ta;
-                    let bch = a.b() as f32 * inv + b.b() as f32 * ta;
-                    egui::Color32::from_rgb(cl(r), cl(g), cl(bch))
-                };
                 let is_active = doc.graph.as_ref().map(|g| g.is_active(id)).unwrap_or(false);
                 let flash_t = doc.node_flash.get(id).copied().unwrap_or(0.0);
                 let fade_t = doc.node_fade.get(id).copied().unwrap_or(0.0);
@@ -823,15 +773,6 @@ pub fn draw_doc_on_board(
                 let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
                 let base_gray_line = egui::Color32::from_gray(120);
                 let base_gray_edge = egui::Color32::from_gray(160);
-                let lerp_color = |a: egui::Color32, b: egui::Color32, t: f32| -> egui::Color32 {
-                    let cl = |x: f32| -> u8 { x.clamp(0.0, 255.0) as u8 };
-                    let ta = t.clamp(0.0, 1.0);
-                    let inv = 1.0 - ta;
-                    let r = a.r() as f32 * inv + b.r() as f32 * ta;
-                    let g = a.g() as f32 * inv + b.g() as f32 * ta;
-                    let bch = a.b() as f32 * inv + b.b() as f32 * ta;
-                    egui::Color32::from_rgb(cl(r), cl(g), cl(bch))
-                };
                 let t_edge = doc.edge_flash.get(id).copied().unwrap_or(0.0);
                 let alpha = 1.0 - t_edge;
                 let edge_line_col = lerp_color(bright_yellow, base_gray_line, alpha);
@@ -983,9 +924,8 @@ pub fn draw_doc_on_board(
     }
 
     // Edge-build interaction and preview rendering
-    let mut _edge_cancel = false;
-    let mut _open_edge_menu: Option<EdgeMenuState> = None;
-    let mut _stop_dashed_build = false;
+    let mut open_edge_menu: Option<EdgeMenuState> = None;
+    let mut stop_dashed_build = false;
     if let Some(build) = ctx.edge_build.clone() {
         if build.doc == doc_id {
             // Determine preview end point: hovered node center (if valid) or cursor
@@ -1037,30 +977,34 @@ pub fn draw_doc_on_board(
                 }
             }
             // Cancel build on escape
-            if ui.input(|i| i.key_pressed(egui::Key::Escape)) { _stop_dashed_build = true; }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) { stop_dashed_build = true; }
             // Only confirm target selection on explicit click over a node
             let pressed = ui.input(|i| i.pointer.primary_pressed());
             if pressed {
                 if let (Some(cursor), Some(target)) = (cursor_opt, snap_to_target) {
-                    _open_edge_menu = Some(EdgeMenuState { doc: doc_id, source: build.source, target, pos: cursor, just_opened: true, filter: String::new() });
-                    _stop_dashed_build = true;
+                    open_edge_menu = Some(EdgeMenuState { doc: doc_id, source: build.source, target, pos: cursor, just_opened: true, filter: String::new() });
+                    stop_dashed_build = true;
                 }
             }
         }
     }
-    if _edge_cancel { _events.edge_build_clear = true; _events.edge_menu_close = true; }
-    if let Some(m) = _open_edge_menu.take() { _events.edge_menu_open = Some(m); }
-    if _stop_dashed_build { _events.edge_build_clear = true; }
+    if let Some(m) = open_edge_menu.take() { _events.edge_menu_open = Some(m); }
+    if stop_dashed_build { _events.edge_build_clear = true; }
     // Edge kind menu popup
     if let Some(menu) = ctx.edge_menu.clone() {
         if menu.doc == doc_id {
             let w = 200.0;
-            let filter_buf = menu.filter.clone();
+            let mut filter_buf = menu.filter.clone();
             let popup = egui::Area::new(egui::Id::new(("edge_menu", doc_id)))
                 .fixed_pos(menu.pos)
                 .show(ui.ctx(), |ui| {
                     egui::Frame::popup(ui.style()).show(ui, |menu_ui| {
                         menu_ui.set_min_width(w);
+                        let filter = menu_ui.add_sized(
+                            egui::vec2(w, 22.0),
+                            egui::TextEdit::singleline(&mut filter_buf).hint_text("filter message types"),
+                        );
+                        if menu.just_opened { filter.request_focus(); }
                         if menu_ui.add_sized(egui::vec2(w, 24.0), egui::Button::new("Always")).clicked() {
                             _events.pending_edge_create = Some(crate::editor::workspace::PendingEdgeCreate { doc: doc_id, source: menu.source, target: menu.target, kind: "Always".to_string() });
                             _events.preview_edge_remove = Some(crate::editor::workspace::PreviewEdge { doc: doc_id, source: menu.source, target: menu.target });
@@ -1090,6 +1034,10 @@ pub fn draw_doc_on_board(
                         }
                     });
                 });
+            // Keep the typed filter across frames (the menu state lives in the workspace).
+            if filter_buf != menu.filter && _events.edge_menu_open.is_none() && !_events.edge_menu_close {
+                _events.edge_menu_open = Some(EdgeMenuState { filter: filter_buf.clone(), just_opened: false, ..menu.clone() });
+            }
             // Close the popup on outside click, with one-frame suppression right after opening
             if ui.input(|i| i.pointer.any_pressed()) {
                 if menu.just_opened {
@@ -1282,5 +1230,13 @@ fn edge_kind_is_internal(v: &serde_json::Value) -> bool {
     false
 }
 
-
-
+/// Linear blend between two colours, `t` in `0..=1` (0 = `a`, 1 = `b`).
+fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
+    let cl = |x: f32| -> u8 { x.clamp(0.0, 255.0) as u8 };
+    let t = t.clamp(0.0, 1.0);
+    let inv = 1.0 - t;
+    let r = a.r() as f32 * inv + b.r() as f32 * t;
+    let g = a.g() as f32 * inv + b.g() as f32 * t;
+    let bl = a.b() as f32 * inv + b.b() as f32 * t;
+    egui::Color32::from_rgb(cl(r), cl(g), cl(bl))
+}

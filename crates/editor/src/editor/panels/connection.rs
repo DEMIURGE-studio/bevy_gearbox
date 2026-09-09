@@ -1,14 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
-use crate::editor::model::types::ConnectionState;
+use crate::editor::session::types::ConnectionState;
 use crate::editor::actions::{ConnectRequested, DisconnectRequested, ReconnectRequested};
-use crate::editor::model::store::EditorStore;
+use crate::editor::session::store::EditorStore;
 
 pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands) {
     ui.horizontal(|ui| {
         let mut endpoint = match &store.connection {
             ConnectionState::Connected { endpoint, .. } => endpoint.clone(),
-            _ => String::from("http://127.0.0.1:15703"),
+            _ => bevy_gearbox_protocol::DEFAULT_URL.to_string(),
         };
         ui.label("Endpoint");
         ui.text_edit_singleline(&mut endpoint);

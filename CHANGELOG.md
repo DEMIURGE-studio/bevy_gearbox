@@ -31,7 +31,8 @@ released together.
   re-pathed.
 - `bevy_gearbox_protocol`: the `client` feature gates the HTTP client and Tokio
   runtime; `server` gates the file scanning. Depend with
-  `default-features = false` and pick a side.
+  `default-features = false` and pick a side. The `BRP_URL` environment
+  variable is no longer read; use `GEARBOX_PROTOCOL_URL`.
 
 ### Added
 
@@ -58,6 +59,8 @@ released together.
 - Editor: machines without a `Name` were never listed in the explorer.
 - Editor: the control-bus watch task was leaked on disconnect; stream errors
   from the game are now logged instead of dropped.
+- Editor: the transition-kind picker's filter box works; a layout sidecar saved
+  for a different chart shape is reported on load.
 
 ### Changed
 

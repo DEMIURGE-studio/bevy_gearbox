@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use crate::types::EntityId;
-use super::model::store::EditorStore;
-use super::model::types::{ConnectionState, IndexFilter};
+use super::session::store::EditorStore;
+use super::session::types::{ConnectionState, IndexFilter};
 use bevy_gearbox_protocol::client::{ClientCommand, NetCommand};
 use crate::editor::workspace::Workspace;
-use crate::editor::docs::Docs;
+use crate::editor::open_docs::Docs;
 
 #[derive(Debug, Clone)]
 pub struct EndpointConfig { pub endpoint: String }

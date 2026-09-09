@@ -7,10 +7,10 @@ use crate::editor::actions::{
     on_reconnect_requested, on_refresh_index_requested,
 };
 use crate::editor::adapter::project_graph_into_doc;
-use crate::editor::docs::Docs;
-use crate::editor::model::store::EditorStore;
-use crate::editor::model::types::ConnectionState as EditorConnectionState;
-use crate::editor::model::types::IndexItem;
+use crate::editor::open_docs::Docs;
+use crate::editor::session::store::EditorStore;
+use crate::editor::session::types::ConnectionState as EditorConnectionState;
+use crate::editor::session::types::IndexItem;
 use crate::editor::workspace::Workspace;
 use crate::model::{ComponentEntry, StateMachineGraph};
 use crate::persistence::{apply_sidecar_to_doc, load_sidecar, parse_sidecar_text};
@@ -243,7 +243,7 @@ fn poll_network(
             let ep = store
                 .last_endpoint
                 .clone()
-                .unwrap_or_else(|| "http://127.0.0.1:15703".to_string());
+                .unwrap_or_else(|| bevy_gearbox_protocol::DEFAULT_URL.to_string());
             store.connection = EditorConnectionState::Connected {
                 session_id: store.session_id,
                 endpoint: ep,
@@ -293,7 +293,7 @@ fn poll_network(
                 let ep = store
                     .last_endpoint
                     .clone()
-                    .unwrap_or_else(|| "http://127.0.0.1:15703".to_string());
+                    .unwrap_or_else(|| bevy_gearbox_protocol::DEFAULT_URL.to_string());
                 store.connection = EditorConnectionState::Connected {
                     session_id: store.session_id,
                     endpoint: ep,

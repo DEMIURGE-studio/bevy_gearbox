@@ -490,7 +490,7 @@ pub struct ClientPlugin;
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
         if app.world().get_resource::<ClientConfig>().is_none() {
-            let url = std::env::var("GEARBOX_PROTOCOL_URL").or_else(|_| std::env::var("BRP_URL")).unwrap_or_else(|_| "http://127.0.0.1:15703".to_string());
+            let url = std::env::var("GEARBOX_PROTOCOL_URL").unwrap_or_else(|_| crate::DEFAULT_URL.to_string());
             app.insert_resource(ClientConfig { url: url.clone() });
             app.insert_resource(Client::new(url));
         } else if app.world().get_resource::<Client>().is_none() {

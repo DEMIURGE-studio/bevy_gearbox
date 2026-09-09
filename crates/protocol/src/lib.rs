@@ -16,6 +16,11 @@
 //!
 //! [`methods`] lists the method names; [`components`] the type-path keys used
 //! in component bags.
+/// Address the editor server binds and the editor client connects to by default.
+pub const DEFAULT_ADDRESS: &str = "127.0.0.1:15703";
+/// [`DEFAULT_ADDRESS`] as an HTTP URL.
+pub const DEFAULT_URL: &str = "http://127.0.0.1:15703";
+
 pub mod components;
 pub mod events;
 pub mod methods;

@@ -10,26 +10,31 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SidecarViewport { pub pan: (f32, f32), pub zoom: f32 }
 
+/// Saved position of a state node, relative to the saved subtree's root.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct NodeLayout { pub pos: (f32, f32), pub collapsed: bool }
+pub struct NodeRecord { pub pos: (f32, f32) }
 
+/// Saved position of a transition pill, relative to the saved subtree's root.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EdgeLayout { pub pill_center: (f32, f32) }
 
+/// The editor's layout for one saved machine: `assets/<id>.sm.ron` next to the
+/// `.scn.ron` scene. Nodes and edges are keyed by `parent_path|name` (see
+/// [`node_key`], [`edge_key`]) so the layout survives entity respawns.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Sidecar {
     pub schema_version: u32,
-    pub scene_basename: Option<String>,
-    pub scene_hash: Option<String>,
+    /// Hash of the chart's shape when the layout was saved. A mismatch on load
+    /// means the chart changed since; positions are still applied by key.
     pub graph_fingerprint: Option<String>,
     pub viewport: Option<SidecarViewport>,
-    pub nodes: std::collections::HashMap<String, NodeLayout>,
+    pub nodes: std::collections::HashMap<String, NodeRecord>,
     pub edges: std::collections::HashMap<String, EdgeLayout>,
 }
 
 impl Sidecar {
     pub fn new() -> Self {
-        Self { schema_version: 1, scene_basename: None, scene_hash: None, graph_fingerprint: None, viewport: None, nodes: Default::default(), edges: Default::default() }
+        Self { schema_version: 1, graph_fingerprint: None, viewport: None, nodes: Default::default(), edges: Default::default() }
     }
 }
 
@@ -150,7 +155,7 @@ pub fn extract_sidecar_for_subtree(doc: &GraphDoc, root: &EntityId) -> Sidecar {
         for (id, sv) in doc.scene.states.iter() {
             if !nodes_set.contains(id) { continue; }
             let key = node_key(&sub, id);
-            sc.nodes.insert(key, NodeLayout { pos: (sv.rect.min.x - base_min.x, sv.rect.min.y - base_min.y), collapsed: false });
+            sc.nodes.insert(key, NodeRecord { pos: (sv.rect.min.x - base_min.x, sv.rect.min.y - base_min.y) });
         }
         for (eid, _ev) in doc.scene.edges.iter() {
             if !sub.edges.contains_key(eid) { continue; }
@@ -165,6 +170,11 @@ pub fn extract_sidecar_for_subtree(doc: &GraphDoc, root: &EntityId) -> Sidecar {
 
 pub fn apply_sidecar_to_doc(doc: &mut GraphDoc, sidecar: &Sidecar) {
     if let Some(graph) = &doc.graph {
+        if let Some(saved) = &sidecar.graph_fingerprint {
+            if *saved != compute_graph_fingerprint(graph) {
+                info!("layout sidecar was saved for a different chart shape; applying positions by name where they still match");
+            }
+        }
         for (id, sv) in doc.scene.states.iter_mut() {
             let key = node_key(graph, id);
             let mut found = sidecar.nodes.get(&key);

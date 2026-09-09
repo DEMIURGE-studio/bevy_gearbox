@@ -1,9 +1,9 @@
 use bevy::prelude::Commands;
 use bevy_egui::egui;
 use crate::editor::panels;
-use crate::editor::model::store::EditorStore;
+use crate::editor::session::store::EditorStore;
 use crate::editor::workspace::Workspace;
-use crate::editor::docs::Docs;
+use crate::editor::open_docs::Docs;
 
 pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands, workspace: &mut Workspace, docs: &mut Docs) {
     draw_save_as_prompt(ui.ctx(), commands, workspace);
@@ -203,12 +203,10 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                         if let Some(m) = ev.edge_menu_open { workspace.edge_menu = Some(m); }
                         if ev.edge_menu_close { workspace.edge_menu = None; }
                         if let Some(req) = ev.pending_edge_create { workspace.pending_edge_create = Some(req); }
-                        if let Some((doc, edge, secs)) = ev.set_edge_delay { commands.trigger(crate::editor::actions::SetEdgeDelayRequested { target: edge, seconds: secs }); workspace.pending_fetch_docs.push(doc); }
                         if let Some((doc, edge)) = ev.clear_edge_delay { commands.trigger(crate::editor::actions::ClearEdgeDelayRequested { target: edge }); workspace.pending_fetch_docs.push(doc); }
                         if let Some((doc, edge, internal)) = ev.set_edge_kind { commands.trigger(crate::editor::actions::SetEdgeKindRequested { target: edge, internal }); workspace.pending_fetch_docs.push(doc); }
                         if let Some(pe) = ev.preview_edge_remove { workspace.preview_edges.retain(|x| !(x.doc == pe.doc && x.source == pe.source && x.target == pe.target)); }
                         // Apply rename inline events
-                        if let Some(start) = ev.rename_start { workspace.rename_inline = Some(start); }
                         if let Some(edit) = ev.rename_edit { workspace.rename_inline = Some(edit); }
                         if let Some(commit) = ev.rename_commit { workspace.pending_rename_commit = Some(commit); workspace.rename_inline = None; }
                         if let Some((d, t)) = ev.rename_cancel { if workspace.rename_inline.as_ref().map(|r| r.doc == d && r.target == t).unwrap_or(false) { workspace.rename_inline = None; } }

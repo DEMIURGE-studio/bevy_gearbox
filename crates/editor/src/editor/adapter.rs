@@ -99,13 +99,11 @@ pub fn project_graph_into_doc(doc: &mut GraphDoc, snapshot: StateMachineGraph) {
     for eid in edge_order.iter() { draw_order.push(*eid); }
     for nid in node_order.iter() { if !containers.contains(nid) { draw_order.push(*nid); } }
 
-    // Initial child mapping (for indicators)
-    let mut initial_substate_of: std::collections::HashMap<EntityId, EntityId> = std::collections::HashMap::new();
+    // Initial children (drawn with an indicator)
     let mut is_initial_child: std::collections::HashSet<EntityId> = std::collections::HashSet::new();
     for (id, _node) in snapshot.nodes.iter() {
         if let Some(child) = snapshot.initial_child(id) {
             if snapshot.nodes.contains_key(&child) {
-                initial_substate_of.insert(*id, child);
                 is_initial_child.insert(child);
             }
         }
@@ -113,7 +111,6 @@ pub fn project_graph_into_doc(doc: &mut GraphDoc, snapshot: StateMachineGraph) {
 
     doc.graph = Some(snapshot);
     doc.scene = ViewScene { states, edges, node_rects, tree: LayoutTree { parent_of, children_of, containers }, draw_order };
-    doc.initial_substate_of = initial_substate_of;
     doc.is_initial_child = is_initial_child;
 }
 

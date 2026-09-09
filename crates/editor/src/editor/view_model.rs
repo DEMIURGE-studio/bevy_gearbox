@@ -54,8 +54,6 @@ pub struct GraphDoc {
     pub drag_anchor_world: Option<egui::Vec2>,
     /// Prebuilt scene and layout
     pub scene: ViewScene,
-    /// Mapping of parent -> initial child state (if any)
-    pub initial_substate_of: HashMap<EntityId, EntityId>,
     /// Set of nodes that are the initial child of their parent
     pub is_initial_child: std::collections::HashSet<EntityId>,
     /// Cache of text label sizes in screen pixels keyed by (label, font_px_rounded)
@@ -82,26 +80,11 @@ impl GraphDoc {
         size
     }
 
-    /// Returns the cached world-space size for a label at the current zoom.
-    pub fn cached_label_size_world(&self, label: &str, zoom: f32, painter: &egui::Painter) -> egui::Vec2 {
-        let size_s = self.cached_label_size_screen(label, zoom, painter);
-        egui::vec2(size_s.x / zoom, size_s.y / zoom)
-    }
-    /// Returns the rect for an entity (node or edge pill) if present.
-    pub fn get_rect(&self, id: &EntityId) -> Option<egui::Rect> {
-        self.scene.node_rects.get(id).copied()
-    }
-
     /// Sets the rect for an entity (node or edge pill) if present.
     pub fn set_rect(&mut self, id: &EntityId, rect: egui::Rect) {
         if let Some(r) = self.scene.node_rects.get_mut(id) { *r = rect; }
         if let Some(sv) = self.scene.states.get_mut(id) { sv.rect = rect; }
         if let Some(ev) = self.scene.edges.get_mut(id) { ev.rect = rect; }
-    }
-
-    /// Returns the transform parent for an entity (node parent or pill parent).
-    pub fn parent_of(&self, id: &EntityId) -> Option<EntityId> {
-        self.scene.tree.parent_of.get(id).and_then(|p| *p)
     }
 
     /// Mark an edge as having just fired

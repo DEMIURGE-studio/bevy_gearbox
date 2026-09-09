@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 use crate::editor::model::store::EditorStore;
 use crate::editor::actions::{OpenRequested, CloseRequested};
-use crate::editor::workspace::Workspace;
 use crate::editor::docs::Docs;
 
 pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands, docs: &Docs) {

@@ -55,10 +55,8 @@ pub(crate) struct ComponentBag {
 impl ComponentBag {
     pub(crate) fn contains(&self, type_path: &str) -> bool { self.entries.contains_key(type_path) }
     pub(crate) fn get(&self, type_path: &str) -> Option<&ComponentEntry> { self.entries.get(type_path) }
-    pub(crate) fn get_mut(&mut self, type_path: &str) -> Option<&mut ComponentEntry> { self.entries.get_mut(type_path) }
     pub(crate) fn insert(&mut self, entry: ComponentEntry) { self.entries.insert(entry.type_path.clone(), entry); }
     pub(crate) fn remove(&mut self, type_path: &str) -> Option<ComponentEntry> { self.entries.remove(type_path) }
-    pub(crate) fn keys(&self) -> impl Iterator<Item=&str> { self.entries.keys().map(|s| s.as_str()) }
 }
 
 /// A state in the machine hierarchy.
@@ -116,7 +114,7 @@ impl Edge {
 
 /// Graph container with adjacency indices for efficient queries.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct StateMachineGraph {
+pub struct StateMachineGraph {
     /// The root state of the machine. The root is also present in `nodes`.
     pub(crate) root: EntityId,
     pub(crate) nodes: HashMap<EntityId, StateNode>,

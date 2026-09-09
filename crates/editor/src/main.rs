@@ -25,7 +25,6 @@ pub mod model;
 pub mod persistence;
 mod plugin;
 pub mod types;
-pub mod util;
 
 use plugin::EditorPlugin;
 

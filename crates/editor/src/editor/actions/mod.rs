@@ -25,7 +25,7 @@ pub fn reconnect(store: &mut EditorStore) {
     let endpoint = store.last_endpoint.clone();
     store.clear_session();
     store.connection = ConnectionState::Disconnected;
-    if let Some(ep) = endpoint {
+    if endpoint.is_some() {
         store.connection = ConnectionState::Connecting;
         store.session_id = store.session_id.wrapping_add(1);
     }

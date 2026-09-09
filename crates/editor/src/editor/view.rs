@@ -1054,7 +1054,7 @@ pub fn draw_doc_on_board(
     if let Some(menu) = ctx.edge_menu.clone() {
         if menu.doc == doc_id {
             let w = 200.0;
-            let mut filter_buf = menu.filter.clone();
+            let filter_buf = menu.filter.clone();
             let popup = egui::Area::new(egui::Id::new(("edge_menu", doc_id)))
                 .fixed_pos(menu.pos)
                 .show(ui.ctx(), |ui| {

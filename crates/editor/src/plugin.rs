@@ -28,7 +28,6 @@ impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ClientPlugin)
             .insert_resource(UiState {
-                url_edit: String::new(),
                 connecting: false,
                 error: None,
                 machines: vec![],
@@ -66,7 +65,6 @@ impl Plugin for EditorPlugin {
 
 #[derive(Resource, Clone)]
 pub(crate) struct UiState {
-    url_edit: String,
     connecting: bool,
     error: Option<String>,
     machines: Vec<(EntityId, Option<String>)>,
@@ -240,7 +238,7 @@ fn poll_network(
     const MAX_PER_FRAME: usize = 64;
 
     // Helper to ensure we are marked as connected if we're receiving traffic
-    let mut ensure_connected = |store: &mut EditorStore| {
+    let ensure_connected = |store: &mut EditorStore| {
         if !matches!(store.connection, EditorConnectionState::Connected { .. }) {
             let ep = store
                 .last_endpoint
@@ -325,7 +323,6 @@ fn poll_network(
                     // Request sidecar for the machine root
                     client_cmd.write(ClientCommand::SidecarForMachine { id: *id });
                     // Also request sidecars for any substate nodes that declare a StateMachineId
-                    let mut requested = 0usize;
                     for (nid, _node) in sm_graph.nodes.iter() {
                         if sm_graph
                             .entity_data
@@ -334,7 +331,6 @@ fn poll_network(
                             .unwrap_or(false)
                         {
                             client_cmd.write(ClientCommand::SidecarForMachine { id: nid.0 });
-                            requested += 1;
                         }
                     }
                 }
@@ -577,7 +573,17 @@ fn ui_system(
     mut docs: ResMut<Docs>,
 ) {
     if let Ok(ctx) = egui_ctx.ctx_mut() {
-        egui::CentralPanel::default().show(ctx, |ui_egui| {
+        // Root `Ui` covering the viewport; `CentralPanel::show` (which built this
+        // itself) is deprecated in egui 0.34 in favour of `show_inside`.
+        let mut root = egui::Ui::new(
+            ctx.clone(),
+            egui::Id::new((ctx.viewport_id(), "gearbox_editor_root")),
+            egui::UiBuilder::new()
+                .layer_id(egui::LayerId::background())
+                .max_rect(ctx.content_rect()),
+        );
+        root.set_clip_rect(ctx.content_rect());
+        egui::CentralPanel::default().show_inside(&mut root, |ui_egui| {
             crate::editor::shell::layout::draw(
                 ui_egui,
                 &mut store,
@@ -612,7 +618,6 @@ fn sync_snapshots_to_workspace(
                             .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
                     });
                     if let Some(edge) = edge_raw {
-                        let edge = crate::util::canonicalize_entity_u64(edge);
                         edges_to_flash.push(EntityId(edge));
                     }
                 }
@@ -622,7 +627,6 @@ fn sync_snapshots_to_workspace(
                             .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
                     });
                     if let Some(entity) = entity_raw {
-                        let entity = crate::util::canonicalize_entity_u64(entity);
                         states_to_flash.push(EntityId(entity));
                     }
                 }
@@ -632,7 +636,6 @@ fn sync_snapshots_to_workspace(
                             .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
                     });
                     if let Some(entity) = entity_raw {
-                        let entity = crate::util::canonicalize_entity_u64(entity);
                         states_to_fade.push(EntityId(entity));
                     }
                 }
@@ -691,7 +694,7 @@ fn sync_snapshots_to_workspace(
                     apply_sidecar_to_doc(entry, &sc);
                     applied = true;
                 }
-                Err(e) => (),
+                Err(err) => warn!("sidecar for machine {id:?} did not parse: {err}"),
             }
             // mark for single-consume once attempted (avoid re-applying every frame)
             consume_sidecar_for.push(*id);
@@ -757,7 +760,7 @@ fn sync_snapshots_to_workspace(
         .map(|(k, v)| (*k, v.clone()))
         .collect();
     for (target_entity, text) in extra_sidecars.iter() {
-        for (doc_id, doc) in docs.map.iter_mut() {
+        for doc in docs.map.values_mut() {
             if doc.graph.is_none() {
                 continue;
             }

@@ -50,7 +50,7 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
 
                 // Board-level zoom: apply wheel zoom to all documents once per frame and persist to workspace.board_transform
                 let scroll_y = ui.ctx().input(|i| i.smooth_scroll_delta.y);
-                if scroll_y != 0.0 && !ui.ctx().wants_pointer_input() {
+                if scroll_y != 0.0 && !ui.ctx().egui_wants_pointer_input() {
                     let scroll: f32 = scroll_y;
                     if scroll.abs() > 0.0 {
                         let factor = 1.0 + (-scroll * 0.001);
@@ -178,7 +178,6 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                                         }
                                     }
                                 }
-                                _ => {}
                             }
                         }
                         // Apply drag ownership changes from events

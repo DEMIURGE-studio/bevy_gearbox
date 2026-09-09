@@ -16,10 +16,63 @@ pub(crate) fn depth_rank(state: Entity, q_substate_of: &Query<&SubstateOf>) -> u
     u32::MAX - q_substate_of.iter_ancestors(state).count() as u32
 }
 
+/// A parallel state has substates but no [`InitialState`]: every child is a
+/// region and all of them are active together.
+pub(crate) fn is_parallel(
+    state: Entity,
+    q_initial: &Query<&InitialState>,
+    q_children: &Query<&Substates>,
+) -> bool {
+    let has_children = q_children
+        .get(state)
+        .ok()
+        .map(|c| c.into_iter().next().is_some())
+        .unwrap_or(false);
+    has_children && !q_initial.contains(state)
+}
+
+/// `true` if `state` is `ancestor` or sits somewhere below it.
+pub(crate) fn is_self_or_descendant(
+    state: Entity,
+    ancestor: Entity,
+    q_substate_of: &Query<&SubstateOf>,
+) -> bool {
+    state == ancestor || q_substate_of.iter_ancestors(state).any(|a| a == ancestor)
+}
+
+/// SCXML "in a final state": an active [`TerminalState`] leaf, a sequential
+/// state whose active child is a `TerminalState`, or a parallel state whose
+/// every region is in a final state.
+pub(crate) fn is_in_final_state(
+    state: Entity,
+    q_active: &Query<(), With<Active>>,
+    q_terminal: &Query<(), With<TerminalState>>,
+    q_initial: &Query<&InitialState>,
+    q_children: &Query<&Substates>,
+) -> bool {
+    if !q_active.contains(state) {
+        return false;
+    }
+    let children: Vec<Entity> = q_children
+        .get(state)
+        .map(|c| c.into_iter().copied().collect())
+        .unwrap_or_default();
+    if children.is_empty() {
+        q_terminal.contains(state)
+    } else if q_initial.contains(state) {
+        children
+            .iter()
+            .any(|&c| q_active.contains(c) && q_terminal.contains(c))
+    } else {
+        children
+            .iter()
+            .all(|&c| is_in_final_state(c, q_active, q_terminal, q_initial, q_children))
+    }
+}
+
 /// The root of the parallel region containing `state`: the child of the
-/// nearest parallel ancestor (a parent with children but no `InitialState`).
-/// Returns `machine` when no ancestor is parallel, so a sequential machine is
-/// a single region.
+/// nearest parallel ancestor. Returns `machine` when no ancestor is parallel,
+/// so a sequential machine is a single region.
 pub(crate) fn region_root(
     state: Entity,
     machine: Entity,
@@ -29,12 +82,7 @@ pub(crate) fn region_root(
 ) -> Entity {
     let mut previous = state;
     for ancestor in q_substate_of.iter_ancestors(state) {
-        let has_children = q_children
-            .get(ancestor)
-            .ok()
-            .map(|c| c.into_iter().next().is_some())
-            .unwrap_or(false);
-        if has_children && !q_initial.contains(ancestor) {
+        if is_parallel(ancestor, q_initial, q_children) {
             return previous;
         }
         previous = ancestor;

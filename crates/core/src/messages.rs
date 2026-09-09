@@ -4,7 +4,7 @@ use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::components::*;
-use crate::helpers::{depth_rank, region_root};
+use crate::helpers::{depth_rank, is_in_final_state, is_parallel, is_self_or_descendant, region_root};
 use crate::resolve::{CandidateGroups, PendingCount, TransitionMessage};
 
 /// Trait implemented by user message types that can trigger state machine
@@ -29,9 +29,10 @@ pub trait GearboxMessage: Message + Clone + Send + Sync + bevy::reflect::TypePat
     /// message type should match unconditionally.
     type Validator: MessageValidator<Self> + Default + Clone + Send + Sync;
 
-    /// Which entity this message is addressed to. Can be a state machine root
-    /// or any substate - the message listener walks `SubstateOf` to find the
-    /// root machine automatically.
+    /// Which entity this message is addressed to. A machine root offers the
+    /// message to every active state's edges. A substate narrows it: only
+    /// edges on that state and its active descendants are considered, which
+    /// is how [`Done`] reaches the one state that finished.
     fn target(&self) -> Entity;
 }
 
@@ -147,6 +148,9 @@ pub struct Matched<M: GearboxMessage> {
 /// undelayed candidate starts its [`EdgeTimer`] and consumes the message for
 /// that region; the transition itself is proposed when the timer elapses.
 ///
+/// A message addressed to a substate (see [`GearboxMessage::target`]) skips
+/// every state outside that substate's subtree.
+///
 /// Runs inside [`GearboxSchedule`](crate::GearboxSchedule) in
 /// [`GearboxPhase::EdgeDetectPhase`](crate::GearboxPhase::EdgeDetectPhase) so
 /// it participates in the per-frame resolution loop: a message written the
@@ -172,7 +176,8 @@ pub fn message_edge_listener<M: GearboxMessage>(
 ) {
     let msgs: Vec<_> = reader.read().cloned().collect();
     for msg in msgs {
-        let machine_entity = q_substate_of.root_ancestor(msg.target());
+        let scope = msg.target();
+        let machine_entity = q_substate_of.root_ancestor(scope);
         let Ok(machine) = q_machine.get(machine_entity) else {
             continue;
         };
@@ -194,7 +199,7 @@ pub fn message_edge_listener<M: GearboxMessage>(
                     break;
                 }
                 let deferred = propose_at_state(
-                    state, machine_entity, group, &msg, &mut proposed,
+                    state, scope, machine_entity, group, &msg, &mut proposed,
                     &q_transitions, &q_edge, &q_target, &q_source, &q_substate_of, &q_delay, &q_timer,
                     &mut writer, &mut matched_writer, &mut pending.0, &mut commands,
                 );
@@ -223,7 +228,7 @@ pub fn message_edge_listener<M: GearboxMessage>(
                         break;
                     }
                     let deferred = propose_at_state(
-                        state, machine_entity, group, &msg, &mut proposed,
+                        state, scope, machine_entity, group, &msg, &mut proposed,
                         &q_transitions, &q_edge, &q_target, &q_source, &q_substate_of, &q_delay, &q_timer,
                         &mut writer, &mut matched_writer, &mut pending.0, &mut commands,
                     );
@@ -240,7 +245,8 @@ pub fn message_edge_listener<M: GearboxMessage>(
     }
 }
 
-/// Propose every edge on `state` whose `MessageEdge<M>` accepts `msg`.
+/// Propose every edge on `state` whose `MessageEdge<M>` accepts `msg`. A
+/// state outside `scope`'s subtree proposes nothing.
 ///
 /// Returns `true` if a delayed edge consumed the message (its timer was
 /// started, or is already running) before any undelayed candidate was
@@ -249,6 +255,7 @@ pub fn message_edge_listener<M: GearboxMessage>(
 #[allow(clippy::too_many_arguments)]
 fn propose_at_state<M: GearboxMessage>(
     state: Entity,
+    scope: Entity,
     machine: Entity,
     group: u64,
     msg: &M,
@@ -265,6 +272,9 @@ fn propose_at_state<M: GearboxMessage>(
     pending: &mut usize,
     commands: &mut Commands,
 ) -> bool {
+    if !is_self_or_descendant(state, scope, q_substate_of) {
+        return false;
+    }
     let Ok(transitions) = q_transitions.get(state) else {
         return false;
     };
@@ -324,16 +334,19 @@ fn propose_at_state<M: GearboxMessage>(
 // Done message — emitted when a TerminalState is entered
 // ---------------------------------------------------------------------------
 
-/// Emitted when a [`TerminalState`] is entered.
-/// Targets the parent state so `MessageEdge<Done>` on the parent can fire.
+/// Emitted when a state finishes: a [`TerminalState`] was entered, so its
+/// parent is done, or every region of a parallel state is in a final state.
+/// Addressed to the finished state, so only a `MessageEdge<Done>` on that
+/// state (or below it) can fire.
 #[derive(Message, Clone, Debug, Reflect)]
 pub struct Done {
     entity: Entity,
 }
 
 impl Done {
-    pub fn new(parent: Entity) -> Self {
-        Self { entity: parent }
+    /// `Done` for `finished`, the state whose work is complete.
+    pub fn new(finished: Entity) -> Self {
+        Self { entity: finished }
     }
 }
 
@@ -344,15 +357,39 @@ impl GearboxMessage for Done {
     }
 }
 
-/// System that emits [`Done`] messages when a [`TerminalState`] gains [`Active`].
+/// Emits [`Done`] when a [`TerminalState`] gains [`Active`]: once for its
+/// parent, then for each parallel ancestor in turn whose every region is now
+/// in a final state (the SCXML completion rule). The cascade stops at the
+/// first ancestor that is not a completed parallel state; a sequential state
+/// finishes only through a terminal child of its own.
+///
 /// Runs in [`GearboxPhase::EdgeDetectPhase`](crate::GearboxPhase::EdgeDetectPhase),
-/// ahead of the edge listeners, so the parent's `MessageEdge<Done>` is
-/// considered in the same iteration.
+/// ahead of the edge listeners, so the `MessageEdge<Done>` is considered in
+/// the same iteration.
 pub fn emit_terminal_done(
     q_new: Query<(Entity, &SubstateOf), (Added<Active>, With<TerminalState>)>,
+    q_substate_of: Query<&SubstateOf>,
+    q_active: Query<(), With<Active>>,
+    q_terminal: Query<(), With<TerminalState>>,
+    q_initial: Query<&InitialState>,
+    q_children: Query<&Substates>,
     mut writer: MessageWriter<Done>,
 ) {
+    let mut finished: HashSet<Entity> = HashSet::new();
     for (_entity, parent) in &q_new {
-        writer.write(Done::new(parent.0));
+        if finished.insert(parent.0) {
+            writer.write(Done::new(parent.0));
+        }
+        let mut ancestors = q_substate_of.iter_ancestors(parent.0);
+        while let Some(ancestor) = ancestors.next() {
+            if !is_parallel(ancestor, &q_initial, &q_children)
+                || !is_in_final_state(ancestor, &q_active, &q_terminal, &q_initial, &q_children)
+            {
+                break;
+            }
+            if finished.insert(ancestor) {
+                writer.write(Done::new(ancestor));
+            }
+        }
     }
 }

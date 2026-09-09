@@ -390,13 +390,13 @@ fn register_editor_file_rpcs(app: &mut App) {
     let set_state_machine_id = world.register_system(set_state_machine_id_handler);
     let sidecar_for_machine_id = world.register_system(sidecar_for_machine_handler);
     let mut methods = world.resource_mut::<RemoteMethods>();
-    methods.insert("editor.save_graph", RemoteMethodSystemId::Instant(save_id));
-    methods.insert("editor.save_as", RemoteMethodSystemId::Instant(save_as_id));
-    methods.insert("editor.save_substates", RemoteMethodSystemId::Instant(save_subs_id));
-    methods.insert("editor.save_sidecar", RemoteMethodSystemId::Instant(save_sc_id));
-    methods.insert("editor.load_sidecar", RemoteMethodSystemId::Instant(load_sc_id));
-    methods.insert("editor.find_sidecar_by_fingerprint", RemoteMethodSystemId::Instant(find_sc_id));
-    methods.insert("editor.set_state_machine_id", RemoteMethodSystemId::Instant(set_state_machine_id));
+    methods.insert(crate::methods::EDITOR_SAVE_GRAPH, RemoteMethodSystemId::Instant(save_id));
+    methods.insert(crate::methods::EDITOR_SAVE_AS, RemoteMethodSystemId::Instant(save_as_id));
+    methods.insert(crate::methods::EDITOR_SAVE_SUBSTATES, RemoteMethodSystemId::Instant(save_subs_id));
+    methods.insert(crate::methods::EDITOR_SAVE_SIDECAR, RemoteMethodSystemId::Instant(save_sc_id));
+    methods.insert(crate::methods::EDITOR_LOAD_SIDECAR, RemoteMethodSystemId::Instant(load_sc_id));
+    methods.insert(crate::methods::EDITOR_FIND_SIDECAR_BY_FINGERPRINT, RemoteMethodSystemId::Instant(find_sc_id));
+    methods.insert(crate::methods::EDITOR_SET_STATE_MACHINE_ID, RemoteMethodSystemId::Instant(set_state_machine_id));
     methods.insert(crate::methods::EDITOR_SIDECAR_FOR_MACHINE, RemoteMethodSystemId::Instant(sidecar_for_machine_id));
 }
 
@@ -412,8 +412,10 @@ struct MachineWatchParams {
 
 fn entity_to_bits(e: Entity) -> u64 { e.to_bits() }
 
+/// Each tick streams a full snapshot: one `machine_created` event per
+/// `StateMachine` currently in the world, with its `Name` if it has one.
+/// Clients diff consecutive snapshots to detect additions, renames and removals.
 fn discovery_watch_handler(_in: In<Option<Value>>, world: &mut World) -> BrpResult<Option<Value>> {
-    // Snapshot of the current machines with their optional names.
     let mut events: Vec<Value> = Vec::new();
     let mut q = world.query::<(Entity, &gearbox::StateMachine, Option<&Name>)>();
     for (e, _sm, name) in q.iter(world) {
@@ -434,8 +436,7 @@ fn discovery_watch_handler(_in: In<Option<Value>>, world: &mut World) -> BrpResu
     Ok(Some(serde_json::json!({"events": events})))
 }
 
-fn machine_watch_handler(In(_params): In<Option<Value>>, _world: &World) -> BrpResult<Option<Value>> {
-    let params: Option<Value> = _params;
+fn machine_watch_handler(In(params): In<Option<Value>>, _world: &World) -> BrpResult<Option<Value>> {
     let p: MachineWatchParams = serde_json::from_value(params.unwrap_or(Value::Null)).map_err(|e| BrpError {
         code: error_codes::INVALID_PARAMS,
         message: format!("invalid params: {e}"),
@@ -476,8 +477,8 @@ fn register_editor_watch_rpcs(app: &mut App) {
     let discovery_watch = world.register_system(discovery_watch_handler);
     let machine_watch = world.register_system(machine_watch_handler);
     let mut methods = world.resource_mut::<RemoteMethods>();
-    methods.insert("editor.discovery+watch", RemoteMethodSystemId::Watching(discovery_watch));
-    methods.insert("editor.machine+watch", RemoteMethodSystemId::Watching(machine_watch));
+    methods.insert(crate::methods::EDITOR_DISCOVERY_WATCH, RemoteMethodSystemId::Watching(discovery_watch));
+    methods.insert(crate::methods::EDITOR_MACHINE_WATCH, RemoteMethodSystemId::Watching(machine_watch));
 }
 
 // =========================
@@ -531,9 +532,9 @@ fn register_editor_control_rpcs(app: &mut App) {
     let open_id = world.register_system(open_on_client_handler);
     let open_if_id = world.register_system(open_if_related_handler);
     let mut methods = world.resource_mut::<RemoteMethods>();
-    methods.insert("editor.control+watch", RemoteMethodSystemId::Watching(control_watch_id));
-    methods.insert("editor.open_on_client", RemoteMethodSystemId::Instant(open_id));
-    methods.insert("editor.open_if_related", RemoteMethodSystemId::Instant(open_if_id));
+    methods.insert(crate::methods::EDITOR_CONTROL_WATCH, RemoteMethodSystemId::Watching(control_watch_id));
+    methods.insert(crate::methods::EDITOR_OPEN_ON_CLIENT, RemoteMethodSystemId::Instant(open_id));
+    methods.insert(crate::methods::EDITOR_OPEN_IF_RELATED, RemoteMethodSystemId::Instant(open_if_id));
 }
 
 // =========================
@@ -576,10 +577,6 @@ fn subscribe_machine_handler(In(params): In<Option<Value>>, world: &mut World) -
     let mut counts = world.resource_mut::<Subscriptions>();
     let c = counts.counts.entry(p.entity).or_insert(0);
     *c = c.saturating_add(1);
-    
-    // Trigger MachineSubscribed event
-    world.commands().trigger(crate::events::MachineSubscribed { target: p.entity });
-    
     Ok(serde_json::json!({"ok": true}))
 }
 
@@ -603,8 +600,8 @@ fn register_editor_subscription_rpcs(app: &mut App) {
     let sub_id = world.register_system(subscribe_machine_handler);
     let unsub_id = world.register_system(unsubscribe_machine_handler);
     let mut methods = world.resource_mut::<RemoteMethods>();
-    methods.insert("editor.machine_subscribe", RemoteMethodSystemId::Instant(sub_id));
-    methods.insert("editor.machine_unsubscribe", RemoteMethodSystemId::Instant(unsub_id));
+    methods.insert(crate::methods::EDITOR_MACHINE_SUBSCRIBE, RemoteMethodSystemId::Instant(sub_id));
+    methods.insert(crate::methods::EDITOR_MACHINE_UNSUBSCRIBE, RemoteMethodSystemId::Instant(unsub_id));
 }
 
 // =========================

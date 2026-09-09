@@ -28,9 +28,6 @@ pub struct ChangeNodeType { #[event_target] pub target: Entity, pub to: NodeType
 #[derive(EntityEvent, Debug, Clone)]
 pub struct ResetRegion { #[event_target] pub target: Entity }
 
-#[derive(EntityEvent, Debug, Clone)]
-pub struct MachineSubscribed { #[event_target] pub target: Entity }
-
 #[derive(Event, Debug, Clone)]
 pub struct CreateTransition { pub machine: Entity, pub source: Entity, pub target: Entity, pub kind: String }
 

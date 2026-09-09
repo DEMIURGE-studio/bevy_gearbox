@@ -55,6 +55,9 @@ released together.
   on Windows; re-saving now works.
 - Editor: "Make Parent" and "Make Parallel" kept the requested child name
   instead of always producing "New State".
+- Editor: machines without a `Name` were never listed in the explorer.
+- Editor: the control-bus watch task was leaked on disconnect; stream errors
+  from the game are now logged instead of dropped.
 
 ### Changed
 

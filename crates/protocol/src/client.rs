@@ -12,7 +12,6 @@ pub struct ClientConfig { pub url: String }
 #[derive(Debug)]
 pub enum Error {
     Http(reqwest::Error),
-    Json(serde_json::Error),
     Rpc { code: i64, message: String, data: Option<Value> },
 }
 
@@ -20,7 +19,6 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Http(e) => write!(f, "http: {}", e),
-            Error::Json(e) => write!(f, "json: {}", e),
             Error::Rpc { code, message, .. } => write!(f, "rpc {}: {}", code, message),
         }
     }
@@ -29,7 +27,6 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl From<reqwest::Error> for Error { fn from(e: reqwest::Error) -> Self { Error::Http(e) } }
-impl From<serde_json::Error> for Error { fn from(e: serde_json::Error) -> Self { Error::Json(e) } }
 
 /// Result of [`Client::save_as`].
 #[derive(Debug, Clone)]
@@ -167,7 +164,7 @@ impl Client {
     /// registration.
     pub async fn save_as(&self, entity: u64, path: &str) -> Result<SaveOutcome, Error> {
         let params = json!({"entity": entity, "path": path});
-        let v = self.jsonrpc_call("editor.save_as", Some(params)).await?;
+        let v = self.jsonrpc_call(crate::methods::EDITOR_SAVE_AS, Some(params)).await?;
         let result = v.get("result").unwrap_or(&v);
         let path = result.get("path").and_then(|s| s.as_str()).unwrap_or("").to_string();
         let skipped = result
@@ -180,7 +177,7 @@ impl Client {
 
     pub async fn save_substates(&self, entity: u64) -> Result<serde_json::Value, Error> {
         let params = json!({"entity": entity});
-        let v = self.jsonrpc_call("editor.save_substates", Some(params)).await?;
+        let v = self.jsonrpc_call(crate::methods::EDITOR_SAVE_SUBSTATES, Some(params)).await?;
         Ok(v.get("result").cloned().unwrap_or(v))
     }
 
@@ -278,13 +275,13 @@ impl Client {
 
     pub async fn open_on_client(&self, entity: u64) -> Result<(), Error> {
         let params = json!({"entity": entity});
-        let _ = self.jsonrpc_call("editor.open_on_client", Some(params)).await?;
+        let _ = self.jsonrpc_call(crate::methods::EDITOR_OPEN_ON_CLIENT, Some(params)).await?;
         Ok(())
     }
 
     pub async fn open_if_related(&self, target: u64, related: u64) -> Result<(), Error> {
         let params = json!({"target": target, "related": related});
-        let _ = self.jsonrpc_call("editor.open_if_related", Some(params)).await?;
+        let _ = self.jsonrpc_call(crate::methods::EDITOR_OPEN_IF_RELATED, Some(params)).await?;
         Ok(())
     }
 }
@@ -558,6 +555,7 @@ enum WatchCtl {
     StartComponents { url: String, id: u64, components: Vec<String> },
     StopComponents { url: String, id: u64 },
     StartControl { url: String },
+    StopControl,
 }
 
 #[derive(Debug, Clone)]
@@ -565,7 +563,7 @@ pub struct MachineSummary { pub id: u64, pub name: Option<String> }
 
 #[derive(Debug)]
 enum WatchEvt {
-    Discovery(Vec<MachineSummary>),
+    Discovery { upserts: Vec<MachineSummary>, removed: Vec<u64> },
     Machine { id: u64, events: Vec<Value> },
     Error(String),
     Components { id: u64, components: serde_json::Map<String, Value>, removed: Vec<String> },
@@ -598,7 +596,7 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
                             // Track last known snapshot of machines to suppress duplicates
                             let mut known: std::collections::BTreeMap<u64, Option<String>> = std::collections::BTreeMap::new();
                             loop {
-                                let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"editor.discovery+watch","params":null});
+                                let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":crate::methods::EDITOR_DISCOVERY_WATCH,"params":null});
                                 let resp = match client_clone.post(&url).json(&req).send().await { Ok(r) => r, Err(e) => { let _ = tx.send(WatchEvt::Error(format!("watch discovery http: {}", e))); tokio::time::sleep(std::time::Duration::from_millis(300)).await; continue; } };
                                 let mut stream = resp.bytes_stream();
                                 while let Some(chunk) = stream.next().await {
@@ -615,40 +613,26 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
                                                         if let Some(events) = v.get("result").and_then(|r| r.get("events")).and_then(|e| e.as_array()) {
                                                             for ev in events {
                                                                 let kind = ev.get("kind").and_then(|s| s.as_str()).unwrap_or("");
-                                                                match kind {
-                                                                    "machine_created" | "machine_renamed" | "machine_id_set" => {
-                                                                        if let Some(raw) = ev.get("machine").and_then(|v| v.as_u64()) {
-                                                                            let name = ev.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                                                            current.insert(raw, name);
-                                                                        }
+                                                                if kind == "machine_created" {
+                                                                    if let Some(raw) = ev.get("machine").and_then(|v| v.as_u64()) {
+                                                                        let name = ev.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                                                        current.insert(raw, name);
                                                                     }
-                                                                    "machine_removed" => {
-                                                                        if let Some(raw) = ev.get("machine").and_then(|v| v.as_u64()) { let _ = current.remove(&raw); }
-                                                                    }
-                                                                    _ => {}
                                                                 }
                                                             }
                                                         }
                                                     }
                                                 }
-                                                // If server sends a full snapshot each tick, compute a diff vs known
+                                                // Each chunk is a full snapshot; diff it against the last one.
                                                 if !current.is_empty() {
-                                                    // Compute diffs
-                                                    let mut diff: Vec<MachineSummary> = Vec::new();
-                                                    // Added or changed
-                                                    for (id, name) in current.iter() {
-                                                        if known.get(id) != Some(name) {
-                                                            diff.push(MachineSummary { id: *id, name: name.clone() });
-                                                        }
-                                                    }
-                                                    // Removed
-                                                    for id in known.keys() {
-                                                        if !current.contains_key(id) {
-                                                            diff.push(MachineSummary { id: *id, name: None });
-                                                        }
-                                                    }
-                                                    if !diff.is_empty() {
-                                                        let _ = tx.send(WatchEvt::Discovery(diff));
+                                                    let upserts: Vec<MachineSummary> = current
+                                                        .iter()
+                                                        .filter(|(id, name)| known.get(*id) != Some(*name))
+                                                        .map(|(id, name)| MachineSummary { id: *id, name: name.clone() })
+                                                        .collect();
+                                                    let removed: Vec<u64> = known.keys().filter(|id| !current.contains_key(id)).copied().collect();
+                                                    if !upserts.is_empty() || !removed.is_empty() {
+                                                        let _ = tx.send(WatchEvt::Discovery { upserts, removed });
                                                     }
                                                     known = current;
                                                 }
@@ -672,7 +656,7 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
                         // Subscribe once before starting stream
                         let _ = client_clone.post(&url).json(&serde_json::json!({"jsonrpc":"2.0","id":1,"method":EDITOR_MACHINE_SUBSCRIBE,"params":{"entity":id}})).send().await;
                         loop {
-                            let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"editor.machine+watch","params":{"entity":id,"last_transition_seq":last_transition_seq}});
+                            let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":crate::methods::EDITOR_MACHINE_WATCH,"params":{"entity":id,"last_transition_seq":last_transition_seq}});
                             let resp = match client_clone.post(&url).json(&req).send().await { Ok(r) => r, Err(e) => { let _ = tx.send(WatchEvt::Error(format!("watch http: {}", e))); tokio::time::sleep(std::time::Duration::from_millis(300)).await; continue; } };
                             let mut stream = resp.bytes_stream();
                             while let Some(chunk) = stream.next().await {
@@ -741,7 +725,7 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
                             }
                         }
                         loop {
-                            let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"world.get_components+watch","params":{"entity":id,"components": comps}});
+                            let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":crate::methods::WORLD_GET_COMPONENTS_WATCH,"params":{"entity":id,"components": comps}});
                             let resp = match client_clone.post(&url).json(&req).send().await { Ok(r) => r, Err(e) => { let _ = tx.send(WatchEvt::Error(format!("components watch http: {}", e))); tokio::time::sleep(std::time::Duration::from_millis(300)).await; continue; } };
                             let mut stream = resp.bytes_stream();
                             while let Some(chunk) = stream.next().await {
@@ -774,13 +758,14 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
                 WatchCtl::StopComponents { url: _url, id } => {
                     if let Some(h) = component_handles.remove(&id) { h.abort(); }
                 }
+                WatchCtl::StopControl => { if let Some(h) = control_handle.take() { h.abort(); } }
                 WatchCtl::StartControl { url } => {
                     if control_handle.is_none() {
                         let tx = evt_tx.clone();
                         let client_clone = client.clone();
                         control_handle = Some(tokio::spawn(async move {
                             loop {
-                                let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"editor.control+watch","params":null});
+                                let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":crate::methods::EDITOR_CONTROL_WATCH,"params":null});
                                 let resp = match client_clone.post(&url).json(&req).send().await { Ok(r) => r, Err(e) => { let _ = tx.send(WatchEvt::Error(format!("watch control http: {}", e))); tokio::time::sleep(std::time::Duration::from_millis(300)).await; continue; } };
                                 let mut stream = resp.bytes_stream();
                                 while let Some(chunk) = stream.next().await {
@@ -819,7 +804,8 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
 #[derive(Message, Clone)]
 /// Events forwarded from the server's `+watch` streams.
 pub enum NetMessage {
-    Discovery(Vec<MachineSummary>),
+    /// Machines that appeared or were renamed, and ids of machines that are gone.
+    Discovery { upserts: Vec<MachineSummary>, removed: Vec<u64> },
     Machine { id: u64, events: Vec<Value> },
     Components { id: u64, components: serde_json::Map<String, Value>, removed: Vec<String> },
     ControlOpen { id: u64 },
@@ -835,6 +821,7 @@ pub enum NetCommand {
     StartComponents { id: u64, components: Vec<String> },
     StopComponents { id: u64 },
     StartControl,
+    StopControl,
 }
 
 fn net_commands(
@@ -854,6 +841,9 @@ fn net_commands(
             }
             NetCommand::StartControl => {
                 if let Some(tx) = &mgr.ctl_tx { let _ = tx.send(WatchCtl::StartControl { url: client.base_url.clone() }); }
+            }
+            NetCommand::StopControl => {
+                if let Some(tx) = &mgr.ctl_tx { let _ = tx.send(WatchCtl::StopControl); }
             }
             NetCommand::StartMachine { id } => {
                 let lt = mgr.cursors.get(&id).copied().unwrap_or(0);
@@ -878,12 +868,10 @@ fn watch_events(
 ) {
     if mgr.evt_rx.is_some() {
         let mut rx = mgr.evt_rx.take().unwrap();
-        let mut drained = 0usize;
         while let Ok(evt) = rx.try_recv() {
-            drained += 1;
             match evt {
-                WatchEvt::Discovery(batch) => {
-                    writer.write(NetMessage::Discovery(batch));
+                WatchEvt::Discovery { upserts, removed } => {
+                    writer.write(NetMessage::Discovery { upserts, removed });
                 }
                 WatchEvt::Machine { id, events } => {
                     // Filter duplicates using stored cursors
@@ -906,21 +894,16 @@ fn watch_events(
                     // Update cursors from filtered
                     mgr.cursors.insert(id, max_t);
                     if !filtered.is_empty() {
-                        let mut _tc = 0usize; let _total = filtered.len();
-                        for ev in filtered.iter() {
-                            if ev.get("kind").and_then(|v| v.as_str()) == Some("transition_edge") { _tc += 1; }
-                        }
                         writer.write(NetMessage::Machine { id, events: filtered });
                     }
                 }
-                WatchEvt::Error(_e) => (),
+                WatchEvt::Error(e) => warn!("gearbox protocol: {e}"),
                 WatchEvt::Components { id, components, removed } => {
                     writer.write(NetMessage::Components { id, components, removed });
                 }
                 WatchEvt::ControlOpen(id) => { writer.write(NetMessage::ControlOpen { id }); }
             }
         }
-        if drained > 0 { /* optional log */ }
         mgr.evt_rx = Some(rx);
     }
 }
@@ -938,8 +921,8 @@ fn connection_guard(
         }
         _ => {
             if !mgr.disconnected_flushed {
-                // Stop discovery
                 writer.write(NetCommand::StopDiscovery);
+                writer.write(NetCommand::StopControl);
                 // Stop all known machine/component watches (safe even if not running)
                 let ids: Vec<u64> = mgr.cursors.keys().copied().collect();
                 for id in ids.into_iter() {

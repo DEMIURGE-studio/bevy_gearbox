@@ -356,18 +356,14 @@ fn poll_network(
         }
         ensure_connected(&mut store);
         match msg.clone() {
-            NetMessage::Discovery(batch) => {
-                for m in batch.into_iter() {
-                    if let Some(name) = m.name.clone() {
-                        if let Some(ix) = ui.machines.iter_mut().position(|(id, _)| id.0 == m.id) {
-                            ui.machines[ix] = (EntityId(m.id), Some(name));
-                        } else {
-                            ui.machines.push((EntityId(m.id), Some(name)));
-                        }
-                    } else {
-                        ui.machines.retain(|(id, _)| id.0 != m.id);
+            NetMessage::Discovery { upserts, removed } => {
+                for m in upserts {
+                    match ui.machines.iter_mut().find(|(id, _)| id.0 == m.id) {
+                        Some(slot) => slot.1 = m.name,
+                        None => ui.machines.push((EntityId(m.id), m.name)),
                     }
                 }
+                ui.machines.retain(|(id, _)| !removed.contains(&id.0));
                 ui.machines.sort_by_key(|(id, _)| id.0);
                 store.index.items = ui
                     .machines

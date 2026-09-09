@@ -131,11 +131,17 @@ fn build_scene_from_root(world: &mut World, root: Entity) -> bevy::world_seriali
     use bevy::world_serialization::DynamicWorldBuilder;
     let entities = collect_state_machine_entities(world, root);
     let type_registry = world.resource::<AppTypeRegistry>().read();
-    let builder = DynamicWorldBuilder::from_world(world, &type_registry)
+    // Reflect-based extraction already leaves out everything without a
+    // `Reflect` impl, which is how `Substates` / `Transitions` (rebuilt from
+    // `SubstateOf` / `Source` on load), `EdgeTimer` and `HistoryState` stay
+    // out of the file. `Active` and `ObservedBy` are reflected for the
+    // editor's sake but are runtime state, so they are denied explicitly.
+    DynamicWorldBuilder::from_world(world, &type_registry)
         .allow_all()
+        .deny_component::<gearbox::Active>()
+        .deny_component::<bevy::ecs::observer::ObservedBy>()
         .extract_entities(entities.into_iter())
-        .build();
-    builder
+        .build()
 }
 
 // Remove ephemeral data from components inside a DynamicScene prior to serialization
@@ -168,7 +174,25 @@ fn ensure_absolute_assets_path(path: String) -> std::path::PathBuf {
     p
 }
 
-fn find_unreflected_components(world: &World, entities: &[Entity]) -> Vec<String> {
+/// Runtime bookkeeping that is never written to a scene and therefore not worth
+/// reporting as "skipped": relationship targets are rebuilt from `SubstateOf` /
+/// `Source` on load, the rest is recreated by `GearboxPlugin`.
+fn is_runtime_only(type_id: std::any::TypeId) -> bool {
+    use std::any::TypeId;
+    [
+        TypeId::of::<gearbox::Active>(),
+        TypeId::of::<gearbox::EdgeTimer>(),
+        TypeId::of::<gearbox::HistoryState>(),
+        TypeId::of::<gearbox::Substates>(),
+        TypeId::of::<gearbox::Transitions>(),
+        TypeId::of::<bevy::ecs::observer::ObservedBy>(),
+    ]
+    .contains(&type_id)
+}
+
+/// Components in the subtree that will not be in the saved scene because they
+/// have no `ReflectComponent` registration. Runtime-only types are not listed.
+fn unserializable_components(world: &World, entities: &[Entity]) -> Vec<String> {
     let regs = world.resource::<AppTypeRegistry>().read();
     let mut out: Vec<String> = Vec::new();
     for &e in entities.iter() {
@@ -177,6 +201,7 @@ fn find_unreflected_components(world: &World, entities: &[Entity]) -> Vec<String
         for component_id in original.archetype().iter_components() {
             if let Some(info) = world.components().get_info(component_id) {
                 if let Some(type_id) = info.type_id() {
+                    if is_runtime_only(type_id) { continue; }
                     let has_refl = regs.get(type_id).and_then(|r| r.data::<bevy::ecs::reflect::ReflectComponent>()).is_some();
                     if !has_refl { out.push(info.name().to_string()); }
                 }
@@ -192,12 +217,10 @@ fn save_as_handler(In(params): In<Option<Value>>, world: &mut World) -> BrpResul
     if !world.entities().contains(p.entity) {
         return Err(BrpError { code: error_codes::INVALID_PARAMS, message: "invalid entity".to_string(), data: None });
     }
-    // Preflight: ensure all components in subtree are reflect-serializable
+    // Components without a reflect registration are left out of the scene;
+    // report them so the editor can warn.
     let set = collect_state_machine_entities(world, p.entity);
-    let bad = find_unreflected_components(world, &set);
-    if !bad.is_empty() {
-        return Err(BrpError { code: error_codes::INVALID_PARAMS, message: format!("unserializable components present: {}", bad.join(", ")), data: None });
-    }
+    let skipped = unserializable_components(world, &set);
     let mut scene = build_scene_from_root(world, p.entity);
     // Clear ephemeral StateMachine fields prior to serialization
     scrub_state_machine_ephemeral(&mut scene);
@@ -209,7 +232,7 @@ fn save_as_handler(In(params): In<Option<Value>>, world: &mut World) -> BrpResul
     let path = ensure_absolute_assets_path(p.path);
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).map_err(|e| BrpError { code: error_codes::INTERNAL_ERROR, message: format!("mkdirs: {e}"), data: None })?; }
     atomic_write(&path, &ron).map_err(|e| BrpError { code: error_codes::INTERNAL_ERROR, message: format!("write: {e}"), data: None })?;
-    Ok(serde_json::json!({"ok": true, "path": path.to_string_lossy().to_string()}))
+    Ok(serde_json::json!({"ok": true, "path": path.to_string_lossy().to_string(), "skipped": skipped}))
 }
 
 #[derive(Deserialize)]
@@ -238,11 +261,7 @@ fn save_substates_handler(In(params): In<Option<Value>>, world: &mut World) -> B
     for (ent, id) in targets.into_iter() {
         let path = ensure_absolute_assets_path(format!("{}.scn.ron", id));
         let set = collect_state_machine_entities(world, ent);
-        let bad = find_unreflected_components(world, &set);
-        if !bad.is_empty() {
-            results.push(serde_json::json!({"entity": entity_to_bits(ent), "id": id, "ok": false, "error": format!("unserializable components: {}", bad.join(", ")) }));
-            continue;
-        }
+        let skipped = unserializable_components(world, &set);
         let mut scene = build_scene_from_root(world, ent);
         // Clear ephemeral StateMachine fields prior to serialization
         scrub_state_machine_ephemeral(&mut scene);
@@ -252,7 +271,7 @@ fn save_substates_handler(In(params): In<Option<Value>>, world: &mut World) -> B
             Ok(ron) => {
                 if let Some(parent) = path.parent() { if let Err(e) = std::fs::create_dir_all(parent) { results.push(serde_json::json!({"entity": entity_to_bits(ent), "id": id, "ok": false, "error": format!("mkdirs: {}", e)})); continue; } }
                 match atomic_write(&path, &ron) {
-                    Ok(_) => { results.push(serde_json::json!({"entity": entity_to_bits(ent), "id": id, "ok": true, "path": path.to_string_lossy().to_string()})); },
+                    Ok(_) => { results.push(serde_json::json!({"entity": entity_to_bits(ent), "id": id, "ok": true, "path": path.to_string_lossy().to_string(), "skipped": skipped})); },
                     Err(e) => { results.push(serde_json::json!({"entity": entity_to_bits(ent), "id": id, "ok": false, "error": format!("write: {}", e)})); },
                 }
             }
@@ -1101,6 +1120,64 @@ mod tests {
             .unwrap();
         assert!(err.is_err(), "non-child rejected");
         assert_eq!(world.get::<gearbox::InitialState>(parent).map(|i| i.0), Some(child), "unchanged after rejection");
+    }
+
+    #[test]
+    fn save_as_writes_structure_and_leaves_out_runtime_state() {
+        use bevy::scene::prelude::{bsn, WorldSceneExt};
+        use gearbox::{AlwaysEdge, Delay, EnterState, InitialState, StateMachine, Substates, Target, Transitions};
+
+        #[derive(Component, Default, Clone)]
+        struct Unreflected;
+
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::asset::AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+            gearbox::GearboxPlugin::default(),
+        ));
+        // `DefaultPlugins` registers `Name`; this minimal app has to.
+        app.register_type::<Name>();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                StateMachineId("saved")
+                StateMachine InitialState(#A)
+                Substates [
+                    #A on(|_: On<EnterState>| {})
+                       Transitions [ (Target(#B) AlwaysEdge Delay::from_secs_f32(1.0) Unreflected) ],
+                    #B,
+                ]
+            })
+            .unwrap()
+            .id();
+        // One frame: A is active, its delay timer is running, the observer is attached.
+        app.update();
+
+        let dir = std::env::temp_dir().join(format!("gearbox_save_as_{}", std::process::id()));
+        let path = dir.join("saved.scn.ron");
+        let result = app
+            .world_mut()
+            .run_system_once_with(
+                save_as_handler,
+                Some(serde_json::json!({"entity": root, "path": path.to_string_lossy()})),
+            )
+            .unwrap()
+            .expect("save_as succeeds even with runtime state and unreflected components present");
+
+        let skipped: Vec<String> = serde_json::from_value(result["skipped"].clone()).unwrap();
+        assert!(skipped.iter().any(|s| s.ends_with("Unreflected")), "unreflected component reported: {skipped:?}");
+        assert_eq!(skipped.len(), 1, "only the unreflected user component is reported: {skipped:?}");
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        for present in ["StateMachine", "StateMachineId", "InitialState", "SubstateOf", "Source", "Target", "AlwaysEdge", "Delay", "Name"] {
+            assert!(text.contains(present), "scene has {present}");
+        }
+        for absent in ["Active", "EdgeTimer", "ObservedBy", "Substates", "Transitions", "HistoryState"] {
+            assert!(!text.contains(absent), "scene must not contain runtime-only {absent}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

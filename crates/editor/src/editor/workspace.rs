@@ -31,7 +31,13 @@ pub struct Workspace {
     pub pending_edge_create: Option<PendingEdgeCreate>,
     /// Pending machine graph refreshes to request over the network
     pub pending_fetch_docs: Vec<EntityId>,
+    /// Open "Save As" prompt, if any (one at a time).
+    pub save_as_prompt: Option<SaveAsPrompt>,
 }
+
+/// State of the "Save As" prompt: which subtree to save and the id being typed.
+#[derive(Debug, Clone)]
+pub struct SaveAsPrompt { pub doc: EntityId, pub target: EntityId, pub id: String, pub just_opened: bool }
 
 #[derive(Debug, Clone)]
 pub struct RenameInline { pub doc: EntityId, pub target: EntityId, pub text: String }

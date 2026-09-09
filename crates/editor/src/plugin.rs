@@ -50,7 +50,7 @@ impl Plugin for EditorPlugin {
             .add_observer(on_open_requested)
             .add_observer(crate::editor::actions::on_close_requested)
             .add_observer(crate::editor::actions::on_unsubscribe_requested)
-            .add_observer(crate::editor::actions::on_save_as_requested)
+            .add_observer(crate::editor::actions::on_save_requested)
             .add_observer(crate::editor::actions::on_save_substates_requested)
             .add_observer(on_set_edge_delay_requested)
             .add_observer(on_clear_edge_delay_requested)

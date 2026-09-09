@@ -5,8 +5,9 @@ use bevy::prelude::*;
 
 /// Stable, human-chosen identifier for a state machine.
 ///
-/// Tooling keys off it: the editor uses it to find the machine's layout
-/// sidecar (`assets/<id>.sm.ron`) and saved scene. Lowers in `bsn!` as
+/// Tooling keys off it: the editor saves the machine as `assets/<id>.scn.ron`
+/// with its layout in `assets/<id>.sm.ron`, so the id may contain `/` to place
+/// the files in a folder (`"enemies/goblin"`). Lowers in `bsn!` as
 /// `StateMachineId("ability")`.
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq, Eq)]
 #[reflect(Component)]

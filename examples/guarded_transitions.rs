@@ -56,11 +56,13 @@ struct Revive {
 }
 
 /// Guard marker: the edge is taken only if the hit would bring hitpoints to zero.
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 struct Lethal;
 
 /// Guard marker: the edge is taken only if the hit deals at least `HEAVY` damage.
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 struct Heavy;
 
 const HEAVY: f32 = 30.0;
@@ -69,7 +71,8 @@ const HEAVY: f32 = 30.0;
 #[derive(Resource, Default)]
 struct CurrentState(&'static str);
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 struct Hitpoints {
     current: f32,
     max: f32,
@@ -85,6 +88,10 @@ fn main() {
         .add_plugins(GearboxPlugin::default())
         .add_plugins(editor_server)
         .init_resource::<CurrentState>()
+        // Registered so the editor's "Save As" writes them into the scene.
+        .register_type::<Hitpoints>()
+        .register_type::<Lethal>()
+        .register_type::<Heavy>()
         .add_systems(Startup, setup)
         .add_systems(Update, input.before(GearboxSet))
         .add_systems(Update, update_label.after(GearboxSet))

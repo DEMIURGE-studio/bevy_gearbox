@@ -155,6 +155,15 @@ impl StateMachineGraph {
         self.entity_data.get(id).map_or(false, |b| b.contains(type_path))
     }
 
+    /// The machine's `StateMachineId`, if it has one.
+    pub(crate) fn machine_id(&self, id: &EntityId) -> Option<String> {
+        self.component_bag(id)?
+            .get(c::STATE_MACHINE_ID)?
+            .value_json
+            .as_str()
+            .map(str::to_string)
+    }
+
     /// The child entered by default when `id` is entered, read from the
     /// `InitialState` value the server sends (entity bits as a string).
     pub(crate) fn initial_child(&self, id: &EntityId) -> Option<EntityId> {

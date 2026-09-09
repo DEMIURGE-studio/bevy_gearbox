@@ -9,12 +9,11 @@ pub enum MenuItemKind {
     MakeParallel,
     Rename,
     Save,
+    SaveAs,
     SaveSubstates,
     Delete,
-    /// Parent is the owner of InitialState; this node becomes the new initial
     MakeInitial { parent: EntityId },
     AddChild,
-    /// Auto-layout the subtree rooted at this node (or its parent, if leaf).
     AutoLayout,
 }
 
@@ -31,6 +30,7 @@ pub enum MenuSelection {
     MakeParallel { target: EntityId },
     RenameEntity { target: EntityId },
     SaveStateMachine { target: EntityId },
+    SaveStateMachineAs { target: EntityId },
     SaveSubstates { target: EntityId },
     DeleteEntity { target: EntityId },
     MakeInitial { parent: EntityId, new_initial: EntityId },
@@ -70,8 +70,13 @@ pub fn build_context_menu(graph: &StateMachineGraph, id: EntityId) -> Vec<MenuIt
         items.push(MenuItem { label: "Make Parallel", kind: MenuItemKind::MakeParallel });
     }
 
-    // Save As: available on any node; server will validate serializability/cross-boundary.
-    items.push(MenuItem { label: "Save As", kind: MenuItemKind::Save });
+    // Save: one click when the node already has a StateMachineId; Save As
+    // prompts for one. Both write `assets/<id>.scn.ron` + `assets/<id>.sm.ron`
+    // on the game side.
+    if graph.machine_id(&id).is_some() {
+        items.push(MenuItem { label: "Save", kind: MenuItemKind::Save });
+    }
+    items.push(MenuItem { label: "Save As\u{2026}", kind: MenuItemKind::SaveAs });
 
     // Save Substates: available if any descendant has a StateMachineId
     let mut has_descendant_with_id = false;

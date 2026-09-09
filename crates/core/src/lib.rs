@@ -314,7 +314,21 @@ impl Plugin for GearboxPlugin {
     fn build(&self, app: &mut App) {
         let outer = self.outer_schedule;
 
-        app.register_type::<StateMachineId>();
+        // Explicit registration so scene serialization works for apps that
+        // build Bevy without `reflect_auto_register`.
+        app.register_type::<StateMachine>()
+            .register_type::<StateMachineId>()
+            .register_type::<Active>()
+            .register_type::<InitialState>()
+            .register_type::<SubstateOf>()
+            .register_type::<Source>()
+            .register_type::<Target>()
+            .register_type::<AlwaysEdge>()
+            .register_type::<EdgeKind>()
+            .register_type::<Delay>()
+            .register_type::<TerminalState>()
+            .register_type::<ResetEdge>()
+            .register_type::<History>();
 
         app.add_message::<TransitionMessage>()
             .init_resource::<PendingCount>()

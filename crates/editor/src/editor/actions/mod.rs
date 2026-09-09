@@ -5,7 +5,6 @@ use super::model::types::{ConnectionState, IndexFilter};
 use bevy_gearbox_protocol::client::{ClientCommand, NetCommand};
 use crate::editor::workspace::Workspace;
 use crate::editor::docs::Docs;
-use rfd::FileDialog;
 
 #[derive(Debug, Clone)]
 pub struct EndpointConfig { pub endpoint: String }
@@ -156,57 +155,121 @@ pub fn on_close_requested(
     close_doc_and_unsubscribe(evt.entity, &mut workspace, &mut docs, &mut proto_net);
 }
 
-/// Save the subtree under `target` as a scene plus layout sidecar, via a file dialog.
+/// Save the subtree under `target` as `assets/<id>.scn.ron` plus the layout
+/// sidecar `assets/<id>.sm.ron`, on the game side, and set `StateMachineId(id)`
+/// on the target so later saves and sidecar lookups find it.
 #[derive(Debug, Clone, Event)]
-pub struct SaveAsRequested { pub doc: EntityId, pub target: EntityId }
+pub struct SaveRequested { pub doc: EntityId, pub target: EntityId, pub id: String }
 
-pub fn on_save_as_requested(
-    save_as_requested: On<SaveAsRequested>,
-    _workspace: Res<Workspace>,
+pub fn on_save_requested(
+    req: On<SaveRequested>,
     docs: Res<Docs>,
     client: Res<bevy_gearbox_protocol::client::Client>,
     rt: Res<bevy_gearbox_protocol::client::TokioRuntime>,
 ) {
-    // Open native Save dialog for .sm.ron, start in assets/ and suggest a name
-    let picked = FileDialog::new()
-        .add_filter("State Machine Sidecar", &["sm.ron"])        
-        .set_title("Save State Machine")
-        .set_directory("assets")
-        .set_file_name("statemachine")
-        .save_file();
+    let id_text = normalize_machine_id(&req.id);
+    let scn_path = format!("{id_text}.scn.ron");
+    let sm_path = format!("{id_text}.sm.ron");
 
-    if let Some(path) = picked {
-        // Derive logical asset base name (without .sm.ron extension and without directories)
-        let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        let base = if fname.ends_with(".sm.ron") { &fname[..fname.len()-7] } else { fname };
-        let id_text = base.to_string();
-        let scn_path = format!("{}.scn.ron", id_text);
-        let sm_path = format!("{}.sm.ron", id_text);
+    // Serialize the layout now, from the doc as drawn; upload it only if the scene saved.
+    let sidecar_text: Option<String> = docs.map.get(&req.doc).and_then(|doc| {
+        let sc = crate::persistence::extract_sidecar_for_subtree(doc, &req.target);
+        ron::ser::to_string_pretty(&sc, ron::ser::PrettyConfig::new()).ok()
+    });
 
-        // Extract and serialize current sidecar snapshot once (to upload only on success)
-        let sidecar_text: Option<String> = docs
-            .map
-            .get(&save_as_requested.doc)
-            .map(|doc| {
-                let root = save_as_requested.target;
-                let sc = crate::persistence::extract_sidecar_for_subtree(doc, &root);
-                let pretty = ron::ser::PrettyConfig::new();
-                ron::ser::to_string_pretty(&sc, pretty).ok()
-            })
-            .flatten();
-
-        let entity_bits = save_as_requested.target.0;
-        let client_cloned = client.clone();
-        rt.0.spawn(async move {
-            // Insert/ensure StateMachineId(name)
-            if client_cloned.set_state_machine_id(entity_bits, &id_text).await.is_err() { return; }
-            // Save As via new RPC
-            if client_cloned.save_as(entity_bits, &scn_path).await.is_err() { return; }
-            // Save editor sidecar adjacent on success
-            if let Some(txt) = sidecar_text {
-                let _ = client_cloned.save_sidecar(&sm_path, &txt).await;
+    let entity_bits = req.target.0;
+    let client_cloned = client.clone();
+    rt.0.spawn(async move {
+        if let Err(e) = client_cloned.set_state_machine_id(entity_bits, &id_text).await {
+            error!("Save: could not set StateMachineId({id_text:?}): {e}");
+            return;
+        }
+        let outcome = match client_cloned.save_as(entity_bits, &scn_path).await {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Save: the game failed to save {scn_path}: {e}");
+                return;
             }
-        });
+        };
+        info!("Save: wrote {}", outcome.path);
+        if !outcome.skipped.is_empty() {
+            warn!(
+                "Save: left out of the scene (no Reflect registration): {}",
+                outcome.skipped.join(", ")
+            );
+        }
+        if let Some(txt) = sidecar_text {
+            if let Err(e) = client_cloned.save_sidecar(&sm_path, &txt).await {
+                error!("Save: the game failed to save the layout sidecar {sm_path}: {e}");
+            }
+        }
+    });
+}
+
+/// A `StateMachineId` from what the user typed. The id is a path relative to
+/// the game's `assets/` folder, so `enemies/goblin` saves to
+/// `assets/enemies/goblin.scn.ron`. Normalisation: either slash works, empty
+/// and `.` segments are dropped, `..` is dropped (no escaping `assets/`), a
+/// leading `assets/` is stripped, and any trailing `.scn.ron` / `.sm.ron` /
+/// `.ron` / `.scn` / `.sm` is removed from the file name (people type file
+/// names). Never empty.
+pub fn normalize_machine_id(input: &str) -> String {
+    let mut segments: Vec<&str> = input
+        .trim()
+        .split(['/', '\\'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
+        .collect();
+    if segments.first() == Some(&"assets") {
+        segments.remove(0);
+    }
+    let Some(last) = segments.pop() else {
+        return "statemachine".to_string();
+    };
+    let mut name = last;
+    loop {
+        let before = name;
+        for suffix in [".scn.ron", ".sm.ron", ".ron", ".scn", ".sm"] {
+            if let Some(stripped) = name.strip_suffix(suffix) {
+                name = stripped;
+                break;
+            }
+        }
+        if name == before || name.is_empty() {
+            break;
+        }
+    }
+    if name.is_empty() {
+        name = "statemachine";
+    }
+    segments.push(name);
+    segments.join("/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_machine_id;
+
+    #[test]
+    fn machine_id_strips_stacked_suffixes() {
+        assert_eq!(normalize_machine_id("statemachine"), "statemachine");
+        assert_eq!(normalize_machine_id("  character  "), "character");
+        assert_eq!(normalize_machine_id("character.scn.ron"), "character");
+        assert_eq!(normalize_machine_id("character.sm.ron"), "character");
+        assert_eq!(normalize_machine_id("statemachine.sm.ron.sm.ron"), "statemachine");
+        assert_eq!(normalize_machine_id("ability.ron"), "ability");
+        assert_eq!(normalize_machine_id(""), "statemachine");
+        assert_eq!(normalize_machine_id(".sm.ron"), "statemachine");
+    }
+
+    #[test]
+    fn machine_id_keeps_folders_under_assets() {
+        assert_eq!(normalize_machine_id("enemies/goblin"), "enemies/goblin");
+        assert_eq!(normalize_machine_id("enemies\\goblin.scn.ron"), "enemies/goblin");
+        assert_eq!(normalize_machine_id("assets/enemies/goblin"), "enemies/goblin");
+        assert_eq!(normalize_machine_id("/enemies//goblin/"), "enemies/goblin");
+        assert_eq!(normalize_machine_id("../../etc/passwd"), "etc/passwd");
+        assert_eq!(normalize_machine_id("enemies/"), "enemies");
     }
 }
 

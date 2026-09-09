@@ -31,6 +31,15 @@ impl std::error::Error for Error {}
 impl From<reqwest::Error> for Error { fn from(e: reqwest::Error) -> Self { Error::Http(e) } }
 impl From<serde_json::Error> for Error { fn from(e: serde_json::Error) -> Self { Error::Json(e) } }
 
+/// Result of [`Client::save_as`].
+#[derive(Debug, Clone)]
+pub struct SaveOutcome {
+    /// Path the server wrote, as the server reports it.
+    pub path: String,
+    /// Component type names left out of the scene (no reflect registration).
+    pub skipped: Vec<String>,
+}
+
 #[derive(Resource, Clone)]
 pub struct Client {
     pub base_url: String,
@@ -153,11 +162,20 @@ impl Client {
 		Ok(())
 	}
 
-    pub async fn save_as(&self, entity: u64, path: &str) -> Result<String, Error> {
+    /// Save the subtree under `entity` as a scene. Returns the path written and
+    /// the component type names that were left out for lack of a reflect
+    /// registration.
+    pub async fn save_as(&self, entity: u64, path: &str) -> Result<SaveOutcome, Error> {
         let params = json!({"entity": entity, "path": path});
         let v = self.jsonrpc_call("editor.save_as", Some(params)).await?;
-        let p = v.get("result").and_then(|r| r.get("path")).and_then(|s| s.as_str()).unwrap_or("").to_string();
-        Ok(p)
+        let result = v.get("result").unwrap_or(&v);
+        let path = result.get("path").and_then(|s| s.as_str()).unwrap_or("").to_string();
+        let skipped = result
+            .get("skipped")
+            .and_then(|s| s.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        Ok(SaveOutcome { path, skipped })
     }
 
     pub async fn save_substates(&self, entity: u64) -> Result<serde_json::Value, Error> {

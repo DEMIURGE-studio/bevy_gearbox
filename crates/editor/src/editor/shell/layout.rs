@@ -6,6 +6,7 @@ use crate::editor::workspace::Workspace;
 use crate::editor::docs::Docs;
 
 pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands, workspace: &mut Workspace, docs: &mut Docs) {
+    draw_save_as_prompt(ui.ctx(), commands, workspace);
     ui.vertical(|ui| {
         // Top bar: connection controls across entire app
         ui.horizontal(|ui| {
@@ -114,7 +115,20 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                         if let Some(selection) = ev.context_menu_selection {
                             match selection {
                                 crate::editor::context_menu::MenuSelection::SaveStateMachine { target } => {
-                                    commands.trigger(crate::editor::actions::SaveAsRequested { doc: doc_id, target });
+                                    let existing = docs.map.get(&doc_id).and_then(|d| d.graph.as_ref()).and_then(|g| g.machine_id(&target));
+                                    match existing {
+                                        Some(id) => commands.trigger(crate::editor::actions::SaveRequested { doc: doc_id, target, id }),
+                                        None => workspace.save_as_prompt = Some(crate::editor::workspace::SaveAsPrompt { doc: doc_id, target, id: "statemachine".to_string(), just_opened: true }),
+                                    }
+                                }
+                                crate::editor::context_menu::MenuSelection::SaveStateMachineAs { target } => {
+                                    let existing = docs.map.get(&doc_id).and_then(|d| d.graph.as_ref()).and_then(|g| g.machine_id(&target));
+                                    workspace.save_as_prompt = Some(crate::editor::workspace::SaveAsPrompt {
+                                        doc: doc_id,
+                                        target,
+                                        id: existing.unwrap_or_else(|| "statemachine".to_string()),
+                                        just_opened: true,
+                                    });
                                 }
                                 crate::editor::context_menu::MenuSelection::SaveSubstates { target } => {
                                     commands.trigger(crate::editor::actions::SaveSubstatesRequested { target });
@@ -238,4 +252,40 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
     });
 }
 
-
+/// The "Save As" prompt: one text field for the `StateMachineId`, showing the
+/// files the game will write. Enter or "Save" commits; Escape or "Cancel" closes.
+fn draw_save_as_prompt(ctx: &egui::Context, commands: &mut Commands, workspace: &mut Workspace) {
+    let Some(mut prompt) = workspace.save_as_prompt.clone() else { return };
+    let mut commit = false;
+    let mut cancel = false;
+    egui::Window::new("Save state machine")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.label("Machine id. Use / for a folder under the game's assets/, e.g. enemies/goblin:");
+            let resp = ui.add(egui::TextEdit::singleline(&mut prompt.id).desired_width(280.0));
+            if prompt.just_opened {
+                resp.request_focus();
+                prompt.just_opened = false;
+            }
+            let id = crate::editor::actions::normalize_machine_id(&prompt.id);
+            ui.monospace(format!("assets/{id}.scn.ron"));
+            ui.monospace(format!("assets/{id}.sm.ron"));
+            ui.horizontal(|ui| {
+                if ui.button("Save").clicked() { commit = true; }
+                if ui.button("Cancel").clicked() { cancel = true; }
+            });
+            if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) { commit = true; }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) { cancel = true; }
+        });
+    if commit {
+        commands.trigger(crate::editor::actions::SaveRequested { doc: prompt.doc, target: prompt.target, id: prompt.id.clone() });
+        workspace.pending_fetch_docs.push(prompt.doc);
+        workspace.save_as_prompt = None;
+    } else if cancel {
+        workspace.save_as_prompt = None;
+    } else {
+        workspace.save_as_prompt = Some(prompt);
+    }
+}

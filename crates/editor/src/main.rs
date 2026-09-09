@@ -9,9 +9,11 @@
 //!
 //! Connect to the default endpoint (`127.0.0.1:15703`), open a machine from the
 //! explorer, and watch transitions light up. Right-click nodes to rename,
-//! re-parent, set the initial state, or add transitions; drag to lay out; use
-//! "Save As" to write the chart as a `.scn.ron` scene with a `.sm.ron` layout
-//! sidecar next to it. Layout is done on demand with a Sugiyama pass
+//! re-parent, set the initial state, or add transitions; drag to lay out.
+//! "Save" writes the chart as `assets/<id>.scn.ron` (a Bevy scene) plus
+//! `assets/<id>.sm.ron` (the editor's layout) in the *game's* working
+//! directory, keyed by the machine's `StateMachineId`; "Save As…" prompts for
+//! the id first. Layout is done on demand with a Sugiyama pass
 //! (`editor::auto_layout`).
 //!
 //! Data flow: protocol JSON -> `model::StateMachineGraph` -> `editor::adapter`

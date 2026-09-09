@@ -510,213 +510,125 @@ pub fn draw_doc_on_board(
     for id in order.iter() {
         if let Some(sv) = doc.scene.states.get(id) {
             let is_container = !matches!(sv.kind, StateKind::Leaf);
-            if is_container {
-                let rect_world = sv.rect;
-                let min = doc.transform.to_screen(rect_world.min);
-                let max = doc.transform.to_screen(rect_world.max);
-                let rect_screen = egui::Rect::from_min_max(min, max);
-                let rounding = egui::CornerRadius::same(6);
-                // Fill (container body stays gray; header changes color)
-                let base_fill = egui::Color32::from_rgb(30, 30, 35);
-                let base_yellow = egui::Color32::from_rgb(230, 200, 40);
-                let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
+            let rect_world = sv.rect;
+            let rect_screen = egui::Rect::from_min_max(
+                doc.transform.to_screen(rect_world.min),
+                doc.transform.to_screen(rect_world.max),
+            );
+            let rounding = egui::CornerRadius::same(6);
+            let base_fill = egui::Color32::from_rgb(30, 30, 35);
+            let base_yellow = egui::Color32::from_rgb(230, 200, 40);
+            let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
+            let is_active = doc.graph.as_ref().map(|g| g.is_active(id)).unwrap_or(false);
+            let flash_t = doc.node_flash.get(id).copied().unwrap_or(0.0);
+            let fade_t = doc.node_fade.get(id).copied().unwrap_or(0.0);
+
+            // The colour that shows the state's activity: the header of a
+            // container, the whole body of a leaf. Yellow while active, fading
+            // back to the base colour after exit, flashing brighter on entry.
+            let base_state_color = if is_container { egui::Color32::from_rgb(38, 38, 46) } else { base_fill };
+            let mut state_color = base_state_color;
+            if is_active {
+                state_color = base_yellow;
+            } else if fade_t > 0.0 {
+                state_color = lerp_color(base_yellow, base_state_color, 1.0 - fade_t);
+            }
+            if flash_t > 0.0 {
+                state_color = lerp_color(state_color, bright_yellow, flash_t);
+            }
+            // Label colour follows: black on yellow, white on the base colour.
+            let text_col = if is_active {
+                egui::Color32::BLACK
+            } else if fade_t > 0.0 {
+                lerp_color(egui::Color32::BLACK, egui::Color32::WHITE, 1.0 - fade_t)
+            } else {
+                egui::Color32::WHITE
+            };
+
+            // Body, and where the label goes.
+            let (label_pos, label_align, edit_rect) = if is_container {
                 painter.rect_filled(rect_screen, rounding, base_fill);
                 let header_rect_world = layout.header_rect(id, &cfg).unwrap_or(rect_world);
-                let header_rect = egui::Rect::from_min_max(doc.transform.to_screen(header_rect_world.min), doc.transform.to_screen(header_rect_world.max));
-                let is_active = doc.graph.as_ref().map(|g| g.is_active(id)).unwrap_or(false);
-                let flash_t = doc.node_flash.get(id).copied().unwrap_or(0.0);
-                let fade_t = doc.node_fade.get(id).copied().unwrap_or(0.0);
-
-                let base_header_color = egui::Color32::from_rgb(38, 38, 46);
-                let mut header_color = base_header_color;
-
-                if is_active {
-                    header_color = base_yellow;
-                } else if fade_t > 0.0 {
-                    header_color = lerp_color(base_yellow, base_header_color, 1.0 - fade_t);
-                }
-
-                if flash_t > 0.0 {
-                    header_color = lerp_color(header_color, bright_yellow, flash_t);
-                }
-
-                painter.rect_filled(header_rect, egui::CornerRadius::same(6), header_color);
-                painter.hline(header_rect.x_range(), header_rect.max.y, egui::Stroke::new(1.0, egui::Color32::from_gray(90)));
-                // Text color: black when header is yellow, else white; lerp on fade
-                let mut text_col = egui::Color32::WHITE;
-                if is_active {
-                    text_col = egui::Color32::BLACK;
-                } else if fade_t > 0.0 {
-                    // approximate: crossfade black->white opposite to header fade
-                    let alpha = 1.0 - fade_t;
-                    text_col = lerp_color(egui::Color32::BLACK, egui::Color32::WHITE, alpha);
-                }
-                // Inline rename for container nodes
-                let edit_rect = egui::Rect::from_min_max(
-                    egui::pos2(header_rect.min.x + pad, header_rect.center().y - 10.0 * zoom),
-                    egui::pos2(header_rect.max.x - pad, header_rect.center().y + 10.0 * zoom),
+                let header_rect = egui::Rect::from_min_max(
+                    doc.transform.to_screen(header_rect_world.min),
+                    doc.transform.to_screen(header_rect_world.max),
                 );
-                draw_label_or_inline_editor(
-                    ui,
-                    ctx,
-                    doc_id,
-                    id,
-                    edit_rect,
-                    &painter,
+                painter.rect_filled(header_rect, rounding, state_color);
+                painter.hline(header_rect.x_range(), header_rect.max.y, egui::Stroke::new(1.0, egui::Color32::from_gray(90)));
+                (
                     egui::pos2(header_rect.min.x + pad, header_rect.center().y),
                     egui::Align2::LEFT_CENTER,
-                    &doc.graph.as_ref().map(|g| g.get_label_for(id)).unwrap_or_else(|| sv.label.clone()),
-                    &font_id,
-                    text_col,
-                    &mut _events,
-                );
-                // Selection halo (drawn before border so border stays crisp)
-                let is_selected = selection.as_ref().map(|s| *s == *id).unwrap_or(false);
-                if is_selected { draw_selection_halo(rect_screen, egui::CornerRadius::same(8)); }
-                // Arrow-handle to start edge building when selected and not already building
-                if is_selected && ctx.edge_build.is_none() {
-                    let handle_r = 6.0 * zoom;
-                    let margin = 4.0 * zoom;
-                    let handle_center = egui::pos2(
-                        rect_screen.max.x - (handle_r + margin),
-                        rect_screen.min.y + (handle_r + margin),
-                    );
-                    let handle_rect = egui::Rect::from_center_size(handle_center, egui::vec2(handle_r * 2.0, handle_r * 2.0));
-                    let hid = egui::Id::new(("edge_handle", doc_id, *id));
-                    let hresp = ui.interact(handle_rect, hid, egui::Sense::click());
-                    // Blue circle
-                    painter.circle_filled(handle_center, handle_r, egui::Color32::from_rgb(110, 190, 255));
-                    // White plus
-                    let plus_len = handle_r * 1.0;
-                    let half = plus_len * 0.5;
-                    let stroke = egui::Stroke::new(1.5 * zoom.max(1.0), egui::Color32::WHITE);
-                    painter.line_segment([egui::pos2(handle_center.x - half, handle_center.y), egui::pos2(handle_center.x + half, handle_center.y)], stroke);
-                    painter.line_segment([egui::pos2(handle_center.x, handle_center.y - half), egui::pos2(handle_center.x, handle_center.y + half)], stroke);
-                    if hresp.clicked() {
-                        _events.edge_build_set = Some(EdgeBuildState { doc: doc_id, source: *id, just_started: true });
-                    }
-                }
-                // Border: dashed if direct child of a Parallel (draw after header so it stays visible)
-                let is_direct_substate_of_parallel = is_direct_substate_of_parallel(doc, id);
-                if is_direct_substate_of_parallel {
-                    let dash = 6.0;
-                    let gap = 4.0;
-                    draw_dashed_rounded_rect(rect_screen, 6.0, egui::Color32::from_gray(160), 1.0, dash, gap);
-                } else {
-                    painter.rect(
-                        rect_screen,
-                        rounding,
-                        egui::Color32::TRANSPARENT,
-                        egui::Stroke::new(1.0, egui::Color32::from_gray(160)),
-                        egui::StrokeKind::Outside,
-                    );
-                }
-                // Initial indicator for nodes that are the parent's initial child
-                if doc.is_initial_child.contains(id) {
-                    draw_initial_indicator(rect_screen);
-                }
+                    egui::Rect::from_min_max(
+                        egui::pos2(header_rect.min.x + pad, header_rect.center().y - 10.0 * zoom),
+                        egui::pos2(header_rect.max.x - pad, header_rect.center().y + 10.0 * zoom),
+                    ),
+                )
             } else {
-                // Leaf state rendering
-                let rect_world = sv.rect;
-                let min = doc.transform.to_screen(rect_world.min);
-                let max = doc.transform.to_screen(rect_world.max);
-                let rect_screen = egui::Rect::from_min_max(min, max);
-                let rounding = egui::CornerRadius::same(6);
-                // Fill (leaf body changes fully; header rule doesn't apply here)
-                let base_fill = egui::Color32::from_rgb(30, 30, 35);
-                let base_yellow = egui::Color32::from_rgb(230, 200, 40);
-                let bright_yellow = egui::Color32::from_rgb(255, 240, 0);
-                let is_active = doc.graph.as_ref().map(|g| g.is_active(id)).unwrap_or(false);
-                let flash_t = doc.node_flash.get(id).copied().unwrap_or(0.0);
-                let fade_t = doc.node_fade.get(id).copied().unwrap_or(0.0);
-
-                let mut fill_color = base_fill;
-
-                if is_active {
-                    fill_color = base_yellow;
-                } else if fade_t > 0.0 {
-                    fill_color = lerp_color(base_yellow, base_fill, 1.0 - fade_t);
-                }
-
-                if flash_t > 0.0 {
-                    fill_color = lerp_color(fill_color, bright_yellow, flash_t);
-                }
-
-                painter.rect_filled(rect_screen, rounding, fill_color);
-                // Selection halo (drawn before border so border stays crisp)
-                let is_selected = selection.as_ref().map(|s| *s == *id).unwrap_or(false);
-                if is_selected { draw_selection_halo(rect_screen, egui::CornerRadius::same(8)); }
-                // Arrow-handle to start edge building when selected and not already building
-                if is_selected && ctx.edge_build.is_none() {
-                    let handle_r = 6.0 * zoom;
-                    let margin = 4.0 * zoom;
-                    let handle_center = egui::pos2(
-                        rect_screen.max.x - (handle_r + margin),
-                        rect_screen.min.y + (handle_r + margin),
-                    );
-                    let hresp = ui.interact(
-                        egui::Rect::from_center_size(handle_center, egui::vec2(handle_r * 2.0, handle_r * 2.0)),
-                        egui::Id::new(("edge_handle", doc_id, *id)),
-                        egui::Sense::click(),
-                    );
-                    // Blue circle
-                    painter.circle_filled(handle_center, handle_r, egui::Color32::from_rgb(110, 190, 255));
-                    // White plus
-                    let plus_len = handle_r * 1.0;
-                    let half = plus_len * 0.5;
-                    let stroke = egui::Stroke::new(1.5 * zoom.max(1.0), egui::Color32::WHITE);
-                    painter.line_segment([egui::pos2(handle_center.x - half, handle_center.y), egui::pos2(handle_center.x + half, handle_center.y)], stroke);
-                    painter.line_segment([egui::pos2(handle_center.x, handle_center.y - half), egui::pos2(handle_center.x, handle_center.y + half)], stroke);
-                    if hresp.clicked() {
-                        _events.edge_build_set = Some(EdgeBuildState { doc: doc_id, source: *id, just_started: true });
-                    }
-                }
-                // Border: dashed if direct child of a Parallel
-                let is_direct_substate_of_parallel = is_direct_substate_of_parallel(doc, id);
-                if is_direct_substate_of_parallel {
-                    let dash = 6.0;
-                    let gap = 4.0;
-                    draw_dashed_rounded_rect(rect_screen, 6.0, egui::Color32::from_gray(160), 1.0, dash, gap);
-                } else {
-            painter.rect(
-                rect_screen,
-                rounding,
-                        egui::Color32::TRANSPARENT,
-                egui::Stroke::new(1.0, egui::Color32::from_gray(160)),
-                egui::StrokeKind::Outside,
-            );
-                }
-                // Text color: black when yellow-ish, else white; also lerp on fade
-                let mut text_col = egui::Color32::WHITE;
-                if is_active { text_col = egui::Color32::BLACK; }
-                else if fade_t > 0.0 {
-                    let alpha = 1.0 - fade_t;
-                    text_col = lerp_color(egui::Color32::BLACK, egui::Color32::WHITE, alpha);
-                }
-                // Inline rename for leaf nodes
+                painter.rect_filled(rect_screen, rounding, state_color);
                 let label_top = rect_screen.center_top() + egui::vec2(0.0, 12.0 * zoom);
-                let edit_rect = egui::Rect::from_min_max(
-                    egui::pos2(rect_screen.min.x + 8.0 * zoom, label_top.y - 2.0 * zoom),
-                    egui::pos2(rect_screen.max.x - 8.0 * zoom, label_top.y + 18.0 * zoom),
-                );
-                draw_label_or_inline_editor(
-                    ui,
-                    ctx,
-                    doc_id,
-                    id,
-                    edit_rect,
-                    &painter,
+                (
                     label_top,
                     egui::Align2::CENTER_TOP,
-                    &doc.graph.as_ref().map(|g| g.get_label_for(id)).unwrap_or_else(|| sv.label.clone()),
-                    &font_id,
-                    text_col,
-                    &mut _events,
+                    egui::Rect::from_min_max(
+                        egui::pos2(rect_screen.min.x + 8.0 * zoom, label_top.y - 2.0 * zoom),
+                        egui::pos2(rect_screen.max.x - 8.0 * zoom, label_top.y + 18.0 * zoom),
+                    ),
+                )
+            };
+            draw_label_or_inline_editor(
+                ui,
+                ctx,
+                doc_id,
+                id,
+                edit_rect,
+                &painter,
+                label_pos,
+                label_align,
+                &doc.graph.as_ref().map(|g| g.get_label_for(id)).unwrap_or_else(|| sv.label.clone()),
+                &font_id,
+                text_col,
+                &mut _events,
+            );
+
+            // Selection halo (before the border so the border stays crisp) and
+            // the handle that starts building an edge from this state.
+            let is_selected = selection.as_ref().map(|s| *s == *id).unwrap_or(false);
+            if is_selected { draw_selection_halo(rect_screen, egui::CornerRadius::same(8)); }
+            if is_selected && ctx.edge_build.is_none() {
+                let handle_r = 6.0 * zoom;
+                let margin = 4.0 * zoom;
+                let handle_center = egui::pos2(
+                    rect_screen.max.x - (handle_r + margin),
+                    rect_screen.min.y + (handle_r + margin),
                 );
-                // Initial indicator for nodes that are the parent's initial child
-                if doc.is_initial_child.contains(id) {
-                    draw_initial_indicator(rect_screen);
+                let handle_rect = egui::Rect::from_center_size(handle_center, egui::vec2(handle_r * 2.0, handle_r * 2.0));
+                let hresp = ui.interact(handle_rect, egui::Id::new(("edge_handle", doc_id, *id)), egui::Sense::click());
+                // Blue circle with a white plus
+                painter.circle_filled(handle_center, handle_r, egui::Color32::from_rgb(110, 190, 255));
+                let half = handle_r * 0.5;
+                let stroke = egui::Stroke::new(1.5 * zoom.max(1.0), egui::Color32::WHITE);
+                painter.line_segment([egui::pos2(handle_center.x - half, handle_center.y), egui::pos2(handle_center.x + half, handle_center.y)], stroke);
+                painter.line_segment([egui::pos2(handle_center.x, handle_center.y - half), egui::pos2(handle_center.x, handle_center.y + half)], stroke);
+                if hresp.clicked() {
+                    _events.edge_build_set = Some(EdgeBuildState { doc: doc_id, source: *id, just_started: true });
                 }
+            }
+
+            // Border: dashed for a direct child of a parallel parent.
+            if is_direct_substate_of_parallel(doc, id) {
+                draw_dashed_rounded_rect(rect_screen, 6.0, egui::Color32::from_gray(160), 1.0, 6.0, 4.0);
+            } else {
+                painter.rect(
+                    rect_screen,
+                    rounding,
+                    egui::Color32::TRANSPARENT,
+                    egui::Stroke::new(1.0, egui::Color32::from_gray(160)),
+                    egui::StrokeKind::Outside,
+                );
+            }
+            // Initial indicator for nodes that are the parent's initial child
+            if doc.is_initial_child.contains(id) {
+                draw_initial_indicator(rect_screen);
             }
         } else if let Some(ev) = doc.scene.edges.get(id) {
             // Edge rendering

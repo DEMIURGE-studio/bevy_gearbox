@@ -5,7 +5,7 @@ All notable changes to bevy_gearbox. The workspace crates (`bevy_gearbox`,
 `bevy_gearbox_protocol`, `bevy_gearbox_editor`) share one version and are
 released together.
 
-## Unreleased
+## 0.9.0 - 2026-09-09
 
 ### Breaking
 

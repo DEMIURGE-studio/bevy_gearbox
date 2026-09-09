@@ -210,6 +210,7 @@ is skipped and the editor logs what it left out.
 
 | Bevy | Gearbox |
 | ---- | ------- |
+| 0.19 | 0.9     |
 | 0.19 | 0.8     |
 | 0.19 | 0.7     |
 | 0.18 | 0.6     |

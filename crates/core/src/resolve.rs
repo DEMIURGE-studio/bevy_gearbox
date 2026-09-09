@@ -303,10 +303,25 @@ pub(crate) fn resolve_transitions(
             }
         }
 
-        // Collect the set of ancestors being exited.
-        let exit_upto = exit_path.len() - lca_depth;
-        let exited_ancestors: HashSet<Entity> =
-            exit_path[..exit_upto].iter().copied().collect();
+        // Collect the set of ancestors being exited. An internal edge whose
+        // target is inside its source keeps the source: a self-loop exits
+        // nothing, and an edge to a descendant exits only the source's active
+        // children (the descendants are swapped, the parent stays).
+        let internal_within_source =
+            is_internal && is_self_or_descendant(msg.target, msg.source, &q_substate_of);
+        let exited_ancestors: HashSet<Entity> = if internal_within_source {
+            if msg.target == msg.source {
+                HashSet::new()
+            } else {
+                q_substates
+                    .get(msg.source)
+                    .map(|c| c.into_iter().copied().filter(|c| machine.active.contains(c)).collect())
+                    .unwrap_or_default()
+            }
+        } else {
+            let exit_upto = exit_path.len() - lca_depth;
+            exit_path[..exit_upto].iter().copied().collect()
+        };
 
         // Collect exited leaves BEFORE modifying active_leaves (needed for history).
         let exited_leaves: Vec<Entity> = machine
@@ -398,15 +413,23 @@ pub(crate) fn resolve_transitions(
             }
         }
 
-        // Enter: drill down to leaf from target.
-        let new_leaves = get_all_leaf_states(
-            msg.target,
-            &q_initial,
-            &q_substates,
-            &q_history,
-            &q_history_state,
-        );
-        machine.active_leaves.extend(new_leaves);
+        // Enter: drill down to a leaf from the target, unless the target's
+        // subtree still holds an active leaf (an internal self-loop keeps its
+        // children as they are).
+        let target_still_active = machine
+            .active_leaves
+            .iter()
+            .any(|&leaf| is_self_or_descendant(leaf, msg.target, &q_substate_of));
+        if !target_still_active {
+            let new_leaves = get_all_leaf_states(
+                msg.target,
+                &q_initial,
+                &q_substates,
+                &q_history,
+                &q_history_state,
+            );
+            machine.active_leaves.extend(new_leaves);
+        }
 
         // Recompute active set.
         let old_active = std::mem::take(&mut machine.active);
@@ -430,15 +453,32 @@ pub(crate) fn resolve_transitions(
         }
 
         for &state in &machine.active {
-            if !old_active.contains(&state) || exited_all.contains(&state) {
-                // New or re-entered (exited then re-added): triggers Added<Active>.
+            let was_active = old_active.contains(&state);
+            let reentered = !is_internal
+                && was_active
+                && (exited_ancestors.contains(&state)
+                    || q_substate_of
+                        .iter_ancestors(state)
+                        .any(|a| exited_ancestors.contains(&a)));
+            if !was_active {
                 commands.entity(state).insert(Active { machine: msg.machine });
+            } else if reentered {
+                // Exited and entered again in this transition (an external
+                // self-loop, or an edge from a state into its own subtree):
+                // a real exit and a fresh entry, so `RemovedComponents` and
+                // `Added<Active>` both see it.
+                commands
+                    .entity(state)
+                    .remove::<Active>()
+                    .insert(Active { machine: msg.machine });
             } else if state == msg.target
                 || (!is_internal
                     && q_substate_of
                         .iter_ancestors(state)
                         .any(|a| a == msg.target))
             {
+                // The target (or a state under it) stayed active: refresh it
+                // so `Changed<Active>` re-checks its always-edges.
                 commands.entity(state).insert(Active { machine: msg.machine });
             }
         }

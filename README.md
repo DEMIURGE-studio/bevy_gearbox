@@ -178,11 +178,21 @@ fn on_enter(q_entered: Query<(Entity, &Active), Added<Active>>) {
 
 ## Examples
 
-- [`examples/invoked_loop.rs`](examples/invoked_loop.rs) - a fire-and-cooldown ability with entry actions.
-- [`examples/parallel_regions.rs`](examples/parallel_regions.rs) - posture and weapon regions driven by keyboard.
-- [`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) - lethal / heavy / otherwise hits through guards and a `Matched<M>` side effect.
+`cargo run --example <name>`; add `--features server` and the editor can connect to it.
 
-Run any of them with `--features server` and the editor can connect to it.
+| How do I... | Example | Shows |
+| --- | --- | --- |
+| build and run a chart at all? | [`hello_statechart`](examples/hello_statechart.rs) | a `bsn!` chart, a derived message, `Added<Active>` after `GearboxSet` |
+| run independent regions, and make one depend on another? | [`parallel_regions`](examples/parallel_regions.rs) | a parallel root, one message per region, `InState` |
+| branch on a condition, or use the message's payload? | [`guarded_transitions`](examples/guarded_transitions.rs) | ordered candidates, guard systems, `Matched<M>`, `BlockedEdges` |
+| filter a message by its payload without a guard system? | [`validators`](examples/validators.rs) | `MessageValidator`, `#[gearbox(validator = ..)]`, a catch-all fallback edge |
+| share one transition across several states? | [`hierarchy`](examples/hierarchy.rs) | an ancestor's edge, nested `InitialState`, the active path from `StateMachine` |
+| react to a message without leaving the state? | [`internal_transitions`](examples/internal_transitions.rs) | `EdgeKind::Internal` vs an external self-loop, `SideEffectPhase` |
+| resume where I left off? | [`history`](examples/history.rs) | `History::Deep` / `Shallow`, `ResetEdge` |
+| nest a sub-chart and continue when it finishes? | [`sub_charts`](examples/sub_charts.rs) | `TerminalState`, `Done`, parallel completion |
+| query "which characters are walking" from a normal system? | [`state_components`](examples/state_components.rs) | `StateComponent` marker and payload forms, `StateInactiveComponent` |
+| run logic inside the resolution loop, or on exit? | [`schedule_phases`](examples/schedule_phases.rs) | `ExitPhase` / `EntryPhase` / `SideEffectPhase` systems, `on(ExitState)`, `FixedUpdate` |
+| drive Bevy `States` from a chart? | [`state_bridge`](examples/state_bridge.rs) | `#[state_bridge]`, `OnEnter`, `DespawnOnExit` |
 
 ## Scenes and serialization
 

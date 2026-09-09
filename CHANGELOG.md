@@ -64,11 +64,23 @@ released together.
 - Editor: "Make Initial" works (new `editor.set_initial_state` RPC), the canvas
   marks the actual initial child instead of guessing the first one, and
   selecting a node highlights its incoming edges again.
-- `examples/guarded_transitions.rs`, a playable guards demo.
+- Eleven examples, one question each ("how do I resume where I left off?",
+  "how do I drive Bevy `States` from a chart?"), listed in the README. Nine
+  are new: `hello_statechart`, `validators`, `hierarchy`,
+  `internal_transitions`, `history`, `sub_charts`, `state_components`,
+  `schedule_phases`, `state_bridge`.
 - Crate-level documentation on every crate, `LICENSE-MIT` and `LICENSE-APACHE`.
 
 ### Fixed
 
+- An `EdgeKind::Internal` self-loop on a parent state added the parent's
+  `InitialState` child alongside the child that was already active. The
+  active child is kept, as documented. An internal edge from a parent to one
+  of its descendants now swaps the active child without touching the parent.
+- An external self-loop (and an external edge from a state into its own
+  subtree) only refreshed `Active` on the source instead of exiting and
+  re-entering it, so `ExitState` / `EnterState`, state components and delay
+  timers did not see a re-entry. They do now.
 - Editor server: saving a chart over an existing `.scn.ron` / `.sm.ron` failed
   on Windows; re-saving now works.
 - Editor: "Make Parent" and "Make Parallel" kept the requested child name

@@ -17,6 +17,10 @@ Character (StateMachine, initial = Alive)
 `Standing` and `Jumping` are substates of `Alive`: the character can only jump
 or stand while alive. `Alive` and `Dead` are substates of the root.
 
+Every section below ends with the example that runs it. The full list, one
+question each, is in the README; the smallest is
+[`examples/hello_statechart.rs`](examples/hello_statechart.rs).
+
 ### Building the chart
 
 Author the machine as one `bsn!` scene. States nest under `Substates [ ... ]`,
@@ -66,6 +70,10 @@ commands.entity(player).apply_scene(bsn! {
     Substates [ /* ... */ ]
 });
 ```
+
+[`examples/hierarchy.rs`](examples/hierarchy.rs) shows what nesting buys you: one
+`Damage` edge on `Alive` covers every state under it, and `Respawn` targets
+`Alive` itself, leaving the nested `InitialState`s to land on `Idle`.
 
 ### Triggering transitions
 
@@ -141,6 +149,9 @@ impl MessageValidator<Attacked> for HighDamageOnly {
 }
 ```
 
+[`examples/validators.rs`](examples/validators.rs) opens a three-digit vault
+with one `Press` message type and a validator per edge.
+
 ### Querying active states with `StateComponent`
 
 The machine changes state internally, but from the outside you need a way to
@@ -178,6 +189,10 @@ fn falling_system(mut q_jumping: Query<&mut Velocity, With<Jumping>>) {
 
 > `StateInactiveComponent` is the inverse: it attaches its payload to the root
 > while the state is **inactive**, removing it once the state becomes active.
+
+[`examples/state_components.rs`](examples/state_components.rs) uses all three
+forms: a `Moving` marker, a `Speed` payload, and a `Controllable` that goes
+away while stunned.
 
 ### Reacting to enter/exit
 
@@ -220,6 +235,11 @@ fn on_enter_jumping(enter: On<EnterState>, mut q_velocity: Query<&mut Velocity>)
 #Jumping on(on_enter_jumping)
 ```
 
+Systems can also live *inside* the schedule, in `GearboxPhase::ExitPhase` or
+`EntryPhase`, where they see every step of a same-frame cascade.
+[`examples/schedule_phases.rs`](examples/schedule_phases.rs) spawns and removes a
+turret beam that way, and runs the whole chart in `FixedUpdate`.
+
 ### Automatic and timed transitions
 
 Not every edge needs a message.
@@ -247,11 +267,13 @@ Not every edge needs a message.
 ],
 ```
 
-The `Ready → Invoking → Cooldown → Ready` shape is the invoked-ability pattern.
-[`examples/invoked_loop.rs`](examples/invoked_loop.rs) runs a playable version —
-press Space to fire, with the cast and cooldown legs paced by `Delay`s. With the
-`gauge` feature, a `Delay` can alias a gauge attribute so cooldowns respond to
-live stat changes.
+A message with no matching edge on any active state is simply dropped, so a
+`Fire` edge on `Ready` alone gates firing during the other two states with no
+"is on cooldown" check anywhere. With the `gauge` feature, a `Delay` can alias
+a gauge attribute so cooldowns respond to live stat changes.
+[`examples/sub_charts.rs`](examples/sub_charts.rs) chains sub-charts with
+`TerminalState` and `Done`, including a parallel gather step that finishes only
+when both regions do.
 
 ### Side effects with payloads
 
@@ -300,6 +322,9 @@ Sending `Attacked { target: character, amount }` is safe when the character is
 `Dead`: `Dead` has no `Attacked` edge, so no `Matched<Attacked>` is produced and
 no damage is applied. Edges are **external** by default; mark them
 `EdgeKind::Internal` only when you want to stay within the source state.
+[`examples/internal_transitions.rs`](examples/internal_transitions.rs) puts the
+two side by side: an internal `Coin` self-loop that keeps the level, and an
+external `Restart` that re-enters and resets it.
 
 ### Guards: ordered candidates, first passing guard wins
 
@@ -357,14 +382,25 @@ systems see a `Matched<M>` for every candidate and skip the ones in
 `BlockedEdges`, so only the winner's payload is applied.
 [`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) is a
 playable version: light and heavy hits pick between `Hurt`, `Staggered` and
-`Dead` through two guards and a fallback.
+`Dead` through two guards and a fallback;
+[`examples/parallel_regions.rs`](examples/parallel_regions.rs) uses `InState` to
+let the weapon region depend on the posture region.
+
+### History and Bevy `States`
+
+Two more things a chart can do, each with its own example:
+
+- **History.** A state with `History::Deep` (or `Shallow`) remembers its active
+  substates when exited and restores them when re-entered; a `ResetEdge` on
+  the way back in forgets them. [`examples/history.rs`](examples/history.rs)
+  pauses and resumes a level select.
+- **Bevy `States`.** Mark a `States` enum `#[state_bridge]`, derive `Component`
+  on it, and put its values on the chart's state entities: entering one sets
+  `NextState`, so `OnEnter`, `in_state` and `DespawnOnExit` work unchanged.
+  [`examples/state_bridge.rs`](examples/state_bridge.rs) drives a menu, loading
+  and playing screen that way.
 
 ---
 
-For runnable, end-to-end examples see
-[`examples/invoked_loop.rs`](examples/invoked_loop.rs) (a playable fire-and-cooldown
-ability), [`examples/parallel_regions.rs`](examples/parallel_regions.rs)
-(parallel regions driven by keyboard input) and
-[`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) (guarded
-candidates with a `Matched<M>` side effect). All are real windowed apps; run one
-with `--features server` and the gearbox editor can connect to it.
+Every example is a real windowed app, one question each; the README lists
+them. Run one with `--features server` and the gearbox editor can connect to it.

@@ -1,16 +1,20 @@
+//! How do I run independent regions, and make one depend on another?
+//!
 //! Two parallel regions driven by keyboard input - authored as a `bsn!` scene
 //! and run as a real Bevy app:
 //!
 //! ```text
 //! Character (StateMachine, no InitialState -> parallel root: both regions run)
 //! ├── Posture (initial = Standing):  <C> Crouch / <S> Stand
-//! └── Weapon  (initial = Holstered): <D> Draw   / <H> Holster
+//! └── Weapon  (initial = Holstered): <D> Draw / <H> Holster   (both only while Standing)
 //! ```
 //!
 //! The root has no `InitialState`, so it's a *parallel* parent: both regions are
 //! active at once and transition independently - drawing your weapon doesn't
-//! change your posture. Each leaf carries an `on(..)` entry observer that
-//! writes its region's on-screen label.
+//! change your posture. The one link between them is a guard: the `Draw` and
+//! `Holster` edges carry `InState(#Standing)`, so both are vetoed while
+//! crouching. Each leaf
+//! carries an `on(..)` entry observer that writes its region's on-screen label.
 //!
 //! ```sh
 //! cargo run --example parallel_regions
@@ -65,7 +69,7 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     commands.spawn((
-        Text2d::new("<C> crouch  <S> stand   <D> draw  <H> holster"),
+        Text2d::new("<C> crouch  <S> stand   <D> draw  <H> holster  (weapon changes need standing)"),
         TextColor(Color::WHITE),
         Transform::from_xyz(0.0, 200.0, 0.0),
     ));
@@ -100,10 +104,11 @@ fn setup(mut commands: Commands) {
             #Weapon InitialState(#Holstered) Substates [
                 #Holstered
                     on(label::<WeaponText>("Weapon: Holstered"))
-                    Transitions [ (Target(#Drawn) MessageEdge::<Draw>) ],
+                    // A built-in guard: taken only while the posture region is in Standing.
+                    Transitions [ (Target(#Drawn) MessageEdge::<Draw> InState(#Standing)) ],
                 #Drawn
                     on(label::<WeaponText>("Weapon: Drawn"))
-                    Transitions [ (Target(#Holstered) MessageEdge::<Holster>) ],
+                    Transitions [ (Target(#Holstered) MessageEdge::<Holster> InState(#Standing)) ],
             ],
         ]
     });

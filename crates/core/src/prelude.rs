@@ -11,7 +11,6 @@ pub use crate::state_component::{
     state_inactive_component_enter, state_inactive_component_exit,
 };
 pub use crate::history::{History, HistoryState};
-pub use crate::registration::DeferEvent;
 pub use crate::messages::{
     GearboxMessage, MessageValidator, AcceptAll, MessageEdge,
     Done,

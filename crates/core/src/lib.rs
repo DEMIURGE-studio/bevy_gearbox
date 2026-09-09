@@ -77,8 +77,7 @@ pub use messages::{
     MessageEdge, MessageValidator,
 };
 pub use registration::{
-    bridge_to_bevy_state, replay_deferred_messages, DeferEvent,
-    InstalledStateBridges, InstalledStateComponents, InstalledTransitions, RegistrationAppExt,
+    bridge_to_bevy_state, InstalledStateBridges, InstalledStateComponents, InstalledTransitions, RegistrationAppExt,
     StateBridgeInstaller, StateInstaller, TransitionInstaller,
 };
 pub use resolve::{BlockedEdges, CandidateGroups, EnterState, ExitState, TransitionMessage};

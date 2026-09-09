@@ -32,5 +32,6 @@ pub const EDITOR_CREATE_TRANSITION: &str = "editor.create_transition";
 pub const EDITOR_MAKE_LEAF: &str = "editor.make_leaf";
 pub const EDITOR_MAKE_PARENT: &str = "editor.make_parent";
 pub const EDITOR_MAKE_PARALLEL: &str = "editor.make_parallel";
+pub const EDITOR_SET_INITIAL_STATE: &str = "editor.set_initial_state";
 
 

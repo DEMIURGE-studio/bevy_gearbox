@@ -157,6 +157,18 @@ impl StateMachineGraph {
         self.entity_data.get(id).map_or(false, |b| b.contains(type_path))
     }
 
+    /// The child entered by default when `id` is entered, read from the
+    /// `InitialState` value the server sends (entity bits as a string).
+    pub(crate) fn initial_child(&self, id: &EntityId) -> Option<EntityId> {
+        self.component_bag(id)?
+            .get(c::INITIAL_STATE)?
+            .value_json
+            .as_str()?
+            .parse::<u64>()
+            .ok()
+            .map(EntityId)
+    }
+
     /// Returns a display label for either a state or an edge entity, derived from its components.
     /// Order of precedence:
     /// 1) Name text (if present)

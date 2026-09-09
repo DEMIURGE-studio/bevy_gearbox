@@ -51,7 +51,9 @@ pub fn build_context_menu(graph: &StateMachineGraph, id: EntityId) -> Vec<MenuIt
     // in the graph snapshot, so treat the graph root as the state machine owner.
     let has_state_children_capability = graph.has_component(&id, c::STATE_CHILDREN);
 
-    let parent_and_lacks_initial = graph.get_parent(&id).and_then(|pid| (!graph.has_component(&pid, c::INITIAL_STATE)).then_some(pid));
+    let parent_for_make_initial = graph
+        .get_parent(&id)
+        .filter(|pid| graph.initial_child(pid) != Some(id));
 
     // Make Leaf (only when there are children)
     if has_children {
@@ -91,8 +93,9 @@ pub fn build_context_menu(graph: &StateMachineGraph, id: EntityId) -> Vec<MenuIt
     // Delete (always)
     items.push(MenuItem { label: "Delete", kind: MenuItemKind::Delete });
 
-    // Make Initial (when node has a parent and the parent lacks InitialState)
-    if let Some(parent) = parent_and_lacks_initial {
+    // Make Initial (when the node has a parent and is not already its initial child).
+    // On a parallel parent this also makes the parent sequential.
+    if let Some(parent) = parent_for_make_initial {
         items.push(MenuItem { label: "Make Initial", kind: MenuItemKind::MakeInitial { parent } });
     }
 

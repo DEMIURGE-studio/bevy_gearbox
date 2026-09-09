@@ -712,12 +712,33 @@ fn register_editor_node_rpcs(app: &mut App) {
     let make_leaf_id = world.register_system(make_leaf_handler);
     let make_parent_id = world.register_system(make_parent_handler);
     let make_parallel_id = world.register_system(make_parallel_handler);
+    let set_initial_id = world.register_system(set_initial_state_handler);
     let mut methods = world.resource_mut::<RemoteMethods>();
     methods.insert(crate::methods::EDITOR_SPAWN_SUBSTATE, RemoteMethodSystemId::Instant(spawn_id));
     methods.insert(crate::methods::EDITOR_DELETE_SUBTREE, RemoteMethodSystemId::Instant(del_id));
     methods.insert(crate::methods::EDITOR_MAKE_LEAF, RemoteMethodSystemId::Instant(make_leaf_id));
     methods.insert(crate::methods::EDITOR_MAKE_PARENT, RemoteMethodSystemId::Instant(make_parent_id));
     methods.insert(crate::methods::EDITOR_MAKE_PARALLEL, RemoteMethodSystemId::Instant(make_parallel_id));
+    methods.insert(crate::methods::EDITOR_SET_INITIAL_STATE, RemoteMethodSystemId::Instant(set_initial_id));
+}
+
+#[derive(Deserialize)]
+struct SetInitialStateParams { parent: Entity, child: Entity }
+
+/// `editor.set_initial_state { parent, child }`: make `child` the state entered
+/// by default when `parent` is entered. `child` must be a direct substate of
+/// `parent`. A parallel parent becomes sequential.
+fn set_initial_state_handler(In(params): In<Option<Value>>, world: &mut World) -> BrpResult {
+    let p: SetInitialStateParams = serde_json::from_value(params.unwrap_or(Value::Null)).map_err(|e| BrpError { code: error_codes::INVALID_PARAMS, message: format!("invalid params: {e}"), data: None })?;
+    if !world.entities().contains(p.parent) || !world.entities().contains(p.child) {
+        return Err(BrpError { code: error_codes::INVALID_PARAMS, message: "invalid entity".to_string(), data: None });
+    }
+    let is_child = world.get::<gearbox::SubstateOf>(p.child).is_some_and(|s| s.0 == p.parent);
+    if !is_child {
+        return Err(BrpError { code: error_codes::INVALID_PARAMS, message: "child is not a direct substate of parent".to_string(), data: None });
+    }
+    world.entity_mut(p.parent).insert(gearbox::InitialState(p.child));
+    Ok(serde_json::json!({"ok": true}))
 }
 
 #[derive(Deserialize)]
@@ -1069,4 +1090,30 @@ fn on_state_exited(
         "entity": entity_to_bits(state).to_string(),
     });
     push_event(tr, ev);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn set_initial_state_sets_initial_on_direct_child_only() {
+        let mut world = World::new();
+        let parent = world.spawn_empty().id();
+        let child = world.spawn(gearbox::SubstateOf(parent)).id();
+        let stranger = world.spawn_empty().id();
+
+        let ok = world
+            .run_system_once_with(set_initial_state_handler, Some(serde_json::json!({"parent": parent, "child": child})))
+            .unwrap();
+        assert!(ok.is_ok(), "direct child accepted: {ok:?}");
+        assert_eq!(world.get::<gearbox::InitialState>(parent).map(|i| i.0), Some(child));
+
+        let err = world
+            .run_system_once_with(set_initial_state_handler, Some(serde_json::json!({"parent": parent, "child": stranger})))
+            .unwrap();
+        assert!(err.is_err(), "non-child rejected");
+        assert_eq!(world.get::<gearbox::InitialState>(parent).map(|i| i.0), Some(child), "unchanged after rejection");
+    }
 }

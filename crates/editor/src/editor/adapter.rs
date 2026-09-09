@@ -103,12 +103,10 @@ pub fn project_graph_into_doc(doc: &mut GraphDoc, snapshot: StateMachineGraph) {
     let mut initial_substate_of: std::collections::HashMap<EntityId, EntityId> = std::collections::HashMap::new();
     let mut is_initial_child: std::collections::HashSet<EntityId> = std::collections::HashSet::new();
     for (id, _node) in snapshot.nodes.iter() {
-        if snapshot.has_component(id, c::INITIAL_STATE) {
-            // best-effort: use the first valid child that exists in graph
-            for child in snapshot.get_children(id).into_iter() {
+        if let Some(child) = snapshot.initial_child(id) {
+            if snapshot.nodes.contains_key(&child) {
                 initial_substate_of.insert(*id, child);
                 is_initial_child.insert(child);
-                break;
             }
         }
     }

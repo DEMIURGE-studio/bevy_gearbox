@@ -146,6 +146,13 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                                     commands.trigger(bevy_gearbox_protocol::events::ChangeNodeType { target: e, to: bevy_gearbox_protocol::events::NodeType::Parallel });
                                     workspace.pending_fetch_docs.push(doc_id);
                                 }
+                                crate::editor::context_menu::MenuSelection::MakeInitial { parent, new_initial } => {
+                                    commands.trigger(bevy_gearbox_protocol::events::SetInitialState {
+                                        parent: bevy::prelude::Entity::from_bits(parent.0),
+                                        child: bevy::prelude::Entity::from_bits(new_initial.0),
+                                    });
+                                    workspace.pending_fetch_docs.push(doc_id);
+                                }
                                 crate::editor::context_menu::MenuSelection::AddChildStateMachine { target } => {
                                     let e = bevy::prelude::Entity::from_bits(target.0);
                                     commands.trigger(bevy_gearbox_protocol::events::SpawnSubstate { parent: e, name: Some("New State".to_string()) });

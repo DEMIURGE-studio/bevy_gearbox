@@ -233,6 +233,12 @@ impl Client {
         Ok(())
     }
 
+    pub async fn set_initial_state(&self, parent: u64, child: u64) -> Result<(), Error> {
+        let params = json!({"parent": parent, "child": child});
+        let _ = self.jsonrpc_call(crate::methods::EDITOR_SET_INITIAL_STATE, Some(params)).await?;
+        Ok(())
+    }
+
     pub async fn create_transition(&self, source: u64, target: u64, kind: &str) -> Result<u64, Error> {
         let params = json!({"source": source, "target": target, "kind": kind});
         let v = self.jsonrpc_call(crate::methods::EDITOR_CREATE_TRANSITION, Some(params)).await?;
@@ -328,6 +334,20 @@ pub fn on_change_node_type(
             crate::events::NodeType::Parent => { let _ = client_cloned.make_parent(target).await; }
             crate::events::NodeType::Parallel => { let _ = client_cloned.make_parallel(target).await; }
         }
+    });
+}
+
+pub fn on_set_initial_state(
+    ev: On<crate::events::SetInitialState>,
+    client: Res<Client>,
+    rt: Res<TokioRuntime>,
+) {
+    let parent = ev.parent.to_bits();
+    let child = ev.child.to_bits();
+    let client_cloned = client.clone();
+    let rt = rt.0.clone();
+    rt.spawn(async move {
+        let _ = client_cloned.set_initial_state(parent, child).await;
     });
 }
 
@@ -470,6 +490,7 @@ impl Plugin for ClientPlugin {
 		app.add_observer(on_despawn);
 		app.add_observer(on_reset_region);
         app.add_observer(on_change_node_type);
+        app.add_observer(on_set_initial_state);
         app.add_systems(Startup, version_check_startup);
         app.add_systems(Update, (connection_guard, net_commands, watch_events, client_commands));
     }

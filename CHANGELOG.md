@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to bevy_gearbox. The workspace crates (`bevy_gearbox`,
+`bevy_gearbox_core`, `bevy_gearbox_macros`, `bevy_gearbox_macros_impl`,
+`bevy_gearbox_protocol`, `bevy_gearbox_editor`) share one version and are
+released together.
+
+## Unreleased
+
+### Breaking
+
+- **Guarded transitions replace `BranchTransition`.** `BranchTransition`,
+  `BranchArm`, `BranchBuilder` and `SpawnBranch` are removed. A conditional
+  transition is now several edges for the same trigger in `Transitions` order,
+  each carrying whatever guard marker it needs; a guard is a system in
+  `GearboxPhase::BlockerPhase` that vetoes candidates, and the first edge no
+  guard vetoes wins. If every edge on the active state is vetoed, the parent's
+  edges are tried. See the "Guards" section of the guide.
+- **Guards now apply to delayed edges too.** A `Delay` edge whose guard vetoes
+  it falls through to the next edge with the same delay, like an XState
+  `after: { ms: [ .. ] }` list.
+- **`GearboxPhase::EdgeCheckPhase` removed.** Use `EdgeDetectPhase`.
+- **`DeferEvent<M>` removed.** It was never wired up. Park messages in a
+  resource and rewrite them from a system, or use an internal self-loop edge.
+- **The `server` feature is off by default.** It adds an HTTP server and world
+  serialization to a game; enable it explicitly to use the editor. The
+  `protocol` feature alias is gone; use `server`.
+- **`StateMachineId` lives in the prelude now** (moved to `bevy_gearbox_core`;
+  `bevy_gearbox::server::StateMachineId` still works). Its reflected type path
+  changed, so scenes the editor saved before this release need that entry
+  re-pathed.
+- `bevy_gearbox_protocol`: the `client` feature gates the HTTP client and Tokio
+  runtime; `server` gates the file scanning. Depend with
+  `default-features = false` and pick a side.
+
+### Added
+
+- Every authorable component lowers in `bsn!`: `StateComponent::<Walking>`,
+  `StateComponent::<Speed>(Speed(7.5))`, `StateMachineId("ability")`,
+  `History::Deep`, `ResetEdge(ResetScope::Target)` and `Source(#X)` all work
+  directly, with no `template(..)` closures.
+- `GearboxPlugin` is exported from the prelude.
+- `bevy_gearbox_macros_impl`: lets a crate that re-exports gearbox offer
+  `#[derive(GearboxMessage)]`, `#[state_component]` and `#[state_bridge]` under
+  its own path, so its users need no direct `bevy_gearbox` dependency.
+- Editor: "Make Initial" works (new `editor.set_initial_state` RPC), the canvas
+  marks the actual initial child instead of guessing the first one, and
+  selecting a node highlights its incoming edges again.
+- `examples/guarded_transitions.rs`, a playable guards demo.
+- Crate-level documentation on every crate, `LICENSE-MIT` and `LICENSE-APACHE`.
+
+### Changed
+
+- Several always-edges on one state form an ordered list; one fires per parallel
+  region per entry (previously one per machine).
+- Examples use `on(..)` entry observers attached in the scene, and run without
+  the editor server unless `--features server` is given.
+
+## 0.8.1
+
+Last release before this changelog. See the git history.

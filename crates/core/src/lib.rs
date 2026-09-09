@@ -69,7 +69,8 @@ pub use commands::{
 };
 pub use components::{
     Active, AlwaysEdge, Delay, EdgeKind, EdgeTimer, InitialState, ResetEdge, ResetScope,
-    Source, StateMachine, SubstateOf, Substates, Target, TerminalState, Transitions,
+    Source, StateMachine, StateMachineId, SubstateOf, Substates, Target, TerminalState,
+    Transitions,
 };
 pub use history::{History, HistoryState};
 pub use messages::{
@@ -312,6 +313,8 @@ impl GearboxPlugin {
 impl Plugin for GearboxPlugin {
     fn build(&self, app: &mut App) {
         let outer = self.outer_schedule;
+
+        app.register_type::<StateMachineId>();
 
         app.add_message::<TransitionMessage>()
             .init_resource::<PendingCount>()

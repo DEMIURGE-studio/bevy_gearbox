@@ -12,18 +12,17 @@
 //!
 //! Entry actions are `on(..)` observers attached to the state entities inside
 //! the scene: each state recolors the orb when entered, and `Invoking` also
-//! launches a projectile. The gearbox editor can attach while this runs - the
-//! example serves the editor protocol on `127.0.0.1:15703`; open the editor and
-//! connect. Close the window to quit.
+//! launches a projectile. Close the window to quit.
 //!
 //! ```sh
 //! cargo run --example invoked_loop
+//! # or, to let the gearbox editor connect on 127.0.0.1:15703:
+//! cargo run --example invoked_loop --features server
 //! ```
 
 use bevy::prelude::*;
 use bevy::scene::prelude::{bsn, CommandsSceneExt};
 use bevy_gearbox::prelude::*;
-use bevy_gearbox::server::{ServerPlugin, StateMachineId};
 use bevy_gearbox::GearboxPlugin;
 
 /// Fires the ability: `Ready -> Invoking`. Addressed to the machine root.
@@ -50,9 +49,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(GearboxPlugin::default())
-        // Lets the gearbox editor connect at 127.0.0.1:15703. Remove this line
-        // to run without the editor server.
-        .add_plugins(ServerPlugin::default())
+        .add_plugins(editor_server)
         .add_systems(Startup, setup)
         .add_systems(Update, fire_on_space.before(GearboxSet))
         .add_systems(Update, move_projectiles)
@@ -141,4 +138,12 @@ fn move_projectiles(
             commands.entity(entity).despawn();
         }
     }
+}
+
+/// With `--features server`, lets the gearbox editor connect at `127.0.0.1:15703`.
+fn editor_server(app: &mut App) {
+    #[cfg(feature = "server")]
+    app.add_plugins(bevy_gearbox::server::ServerPlugin::default());
+    #[cfg(not(feature = "server"))]
+    let _ = app;
 }

@@ -12,23 +12,7 @@ use crate::methods::EDITOR_RESET_REGION;
 use crate::methods::EDITOR_CREATE_TRANSITION;
 use std::collections::{HashMap, VecDeque};
 
-/// Stable, human-chosen identifier for a state machine. The editor uses it to
-/// locate the machine's layout sidecar (`assets/<id>.sm.ron`) and saved scene.
-#[derive(Component, Reflect, Default, Clone, Debug, PartialEq, Eq)]
-#[reflect(Component)]
-pub struct StateMachineId(pub String);
-
-impl StateMachineId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-}
-
-impl From<&str> for StateMachineId {
-    fn from(id: &str) -> Self {
-        Self(id.to_string())
-    }
-}
+pub use bevy_gearbox_core::StateMachineId;
 
 /// Exposes this app's state machines to the gearbox editor.
 ///
@@ -68,8 +52,6 @@ impl Plugin for ServerPlugin {
             .add_observer(on_state_exited)
             .add_systems(Update, track_transition_edges.after(gearbox::GearboxSet))
             ;
-        // Register StateMachineId for reflection (scene serialization)
-        app.register_type::<StateMachineId>();
 
         // Editor RPCs.
         register_editor_subscription_rpcs(app);

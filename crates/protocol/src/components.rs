@@ -12,7 +12,7 @@ pub const ALWAYS_EDGE: &str = "bevy_gearbox_core::components::AlwaysEdge";
 pub const DELAY: &str = "bevy_gearbox_core::components::Delay";
 pub const EDGE_KIND: &str = "bevy_gearbox_core::components::EdgeKind";
 pub const INITIAL_STATE: &str = "bevy_gearbox_core::components::InitialState";
-pub const STATE_MACHINE_ID: &str = "bevy_gearbox_protocol::server::StateMachineId";
+pub const STATE_MACHINE_ID: &str = "bevy_gearbox_core::components::StateMachineId";
 
 // Substring used to detect generic message edge component types like ...MessageEdge<...>
 pub const MESSAGE_EDGE_SUBSTR: &str = "MessageEdge";

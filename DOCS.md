@@ -351,5 +351,5 @@ For runnable, end-to-end examples see
 ability), [`examples/parallel_regions.rs`](examples/parallel_regions.rs)
 (parallel regions driven by keyboard input) and
 [`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) (guarded
-candidates with a `Matched<M>` side effect). All are real windowed apps that
-also serve the editor protocol — run one and connect the gearbox editor to it.
+candidates with a `Matched<M>` side effect). All are real windowed apps; run one
+with `--features server` and the gearbox editor can connect to it.

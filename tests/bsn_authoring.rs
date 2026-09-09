@@ -8,7 +8,6 @@ use bevy::prelude::*;
 use bevy::scene::prelude::{bsn, CommandsSceneExt};
 use bevy::time::TimeUpdateStrategy;
 use bevy_gearbox::prelude::*;
-use bevy_gearbox::server::StateMachineId;
 use bevy_gearbox::GearboxPlugin;
 
 #[derive(Message, Clone, Reflect, GearboxMessage)]

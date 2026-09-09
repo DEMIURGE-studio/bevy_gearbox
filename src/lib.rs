@@ -45,8 +45,8 @@
 //!
 //! The [guide](https://github.com/DEMIURGE-studio/bevy_gearbox/blob/master/DOCS.md)
 //! walks through every feature with a worked example. The `server` feature
-//! (on by default) adds [`server::ServerPlugin`], which lets the visual editor
-//! connect to a running game.
+//! adds [`server::ServerPlugin`], which lets the visual editor connect to a
+//! running game; it is off by default because it pulls in an HTTP server.
 
 extern crate self as bevy_gearbox;
 

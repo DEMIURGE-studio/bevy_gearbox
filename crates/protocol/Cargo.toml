@@ -11,20 +11,19 @@ categories = ["game-development", "game-engines"]
 
 [features]
 default = ["client"]
-client = []
-server = ["bevy/bevy_remote", "bevy/bevy_world_serialization", "dep:bevy_gearbox_core"]
+# Editor side: HTTP client, Tokio runtime, watch streams.
+client = ["dep:reqwest", "dep:tokio", "dep:futures-util"]
+# Game side: Bevy Remote Protocol server, scene serialization, sidecar file scan.
+server = ["bevy/bevy_remote", "bevy/bevy_world_serialization", "dep:bevy_gearbox_core", "dep:walkdir"]
 
 [dependencies]
-bevy = { workspace = true, features = [
-    "bevy_remote",
-    "bevy_log",
-] }
+bevy = { workspace = true, features = ["bevy_log"] }
 bevy_gearbox_core = { workspace = true, optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"] }
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
-futures-util = "0.3.30"
 thiserror = "1.0.65"
-walkdir = "2.5.0"
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"], optional = true }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"], optional = true }
+futures-util = { version = "0.3.30", optional = true }
+walkdir = { version = "2.5.0", optional = true }
 

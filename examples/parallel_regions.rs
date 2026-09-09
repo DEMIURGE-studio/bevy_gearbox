@@ -14,12 +14,13 @@
 //!
 //! ```sh
 //! cargo run --example parallel_regions
+//! # or, to let the gearbox editor connect on 127.0.0.1:15703:
+//! cargo run --example parallel_regions --features server
 //! ```
 
 use bevy::prelude::*;
 use bevy::scene::prelude::{bsn, CommandsSceneExt};
 use bevy_gearbox::prelude::*;
-use bevy_gearbox::server::{ServerPlugin, StateMachineId};
 use bevy_gearbox::GearboxPlugin;
 
 #[derive(Message, Clone, Reflect, GearboxMessage)]
@@ -54,7 +55,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(GearboxPlugin::default())
-        .add_plugins(ServerPlugin::default())
+        .add_plugins(editor_server)
         .add_systems(Startup, setup)
         .add_systems(Update, input.before(GearboxSet))
         .run();
@@ -135,4 +136,12 @@ fn input(
 /// Entry action: write `text` into the label marked by `L`.
 fn label<L: Component>(text: &'static str) -> impl Fn(On<EnterState>, Single<&mut Text2d, With<L>>) + Clone {
     move |_enter, mut label| label.0 = text.into()
+}
+
+/// With `--features server`, lets the gearbox editor connect at `127.0.0.1:15703`.
+fn editor_server(app: &mut App) {
+    #[cfg(feature = "server")]
+    app.add_plugins(bevy_gearbox::server::ServerPlugin::default());
+    #[cfg(not(feature = "server"))]
+    let _ = app;
 }

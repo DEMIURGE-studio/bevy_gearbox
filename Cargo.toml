@@ -9,10 +9,7 @@ homepage = "https://github.com/DEMIURGE-studio/bevy_gearbox"
 readme = "README.md"
 keywords = ["bevy", "state-machine", "gamedev", "ecs"]
 categories = ["game-development", "game-engines"]
-
-[lib]
-name = "bevy_gearbox"
-path = "src/lib.rs"
+exclude = ["assets/", ".cargo/"]
 
 [workspace]
 members = [
@@ -33,28 +30,23 @@ bevy = { version = "0.19.0", default-features = false }
 bevy_gearbox_core = { version = "=0.8.1", path = "crates/core" }
 bevy_gearbox_macros = { version = "=0.8.1", path = "crates/macros" }
 bevy_gearbox_macros_impl = { version = "=0.8.1", path = "crates/macros_impl" }
-bevy_gearbox_protocol = { version = "=0.8.1", path = "crates/protocol" }
+bevy_gearbox_protocol = { version = "=0.8.1", path = "crates/protocol", default-features = false }
 
 [dependencies]
 bevy = { workspace = true, features = ["bevy_state"] }
 bevy_gearbox_core.workspace = true
 bevy_gearbox_macros.workspace = true
 bevy_gearbox_protocol = { workspace = true, features = ["server"], optional = true }
-inventory = "0.3.21"
-rustversion = "1"
 
 [dev-dependencies]
 bevy = { workspace = true, features = ["default"] }
-bevy_gearbox_protocol = { workspace = true, features = ["server"] }
-criterion = "0.5"
 
 [features]
-default = ["server"]
+default = []
+# Optional bevy_gauge integration (`Delay` driven by an attribute).
 gauge = ["bevy_gearbox_core/gauge"]
-protocol = ["dep:bevy_gearbox_protocol"]
-server = ["protocol", "bevy_gearbox_protocol/server"]
+# Editor server: exposes running machines to the visual editor over the Bevy
+# Remote Protocol. A development tool, so off by default; pulls in the
+# HTTP server and world serialization.
+server = ["dep:bevy_gearbox_protocol"]
 trace_tracy = ["bevy/trace_tracy"]
-debug = ["bevy/debug"]
-
-[build-dependencies]
-rustc_version = "0.4"

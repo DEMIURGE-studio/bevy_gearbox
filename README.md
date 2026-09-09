@@ -40,6 +40,8 @@ use bevy_gearbox::GearboxPlugin;
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, GearboxPlugin::default()))
+        // Optional plugin for connecting the editor to your game
+        .add_plugins(editor_server)
         .run();
 }
 ```
@@ -171,7 +173,7 @@ fn on_enter(q_entered: Query<(Entity, &Active), Added<Active>>) {
 - Internal vs external transitions
 - Bridge to Bevy `States` (`#[state_bridge]`)
 - Optional [bevy_gauge](https://crates.io/crates/bevy_gauge) integration: `Delay` driven by an attribute (`gauge` feature)
-- Optional editor server (`server` feature) for the visual editor
+- Optional editor server (`server` feature, off by default) for the visual editor
 
 ## Examples
 
@@ -179,7 +181,7 @@ fn on_enter(q_entered: Query<(Entity, &Active), Added<Active>>) {
 - [`examples/parallel_regions.rs`](examples/parallel_regions.rs) - posture and weapon regions driven by keyboard.
 - [`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) - lethal / heavy / otherwise hits through guards and a `Matched<M>` side effect.
 
-All three serve the editor protocol; run one and connect the editor to it.
+Run any of them with `--features server` and the editor can connect to it.
 
 ## Scenes and serialization
 

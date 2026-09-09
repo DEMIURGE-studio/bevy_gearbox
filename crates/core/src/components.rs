@@ -3,6 +3,27 @@ use std::time::Duration;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
+/// Stable, human-chosen identifier for a state machine.
+///
+/// Tooling keys off it: the editor uses it to find the machine's layout
+/// sidecar (`assets/<id>.sm.ron`) and saved scene. Lowers in `bsn!` as
+/// `StateMachineId("ability")`.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct StateMachineId(pub String);
+
+impl StateMachineId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+}
+
+impl From<&str> for StateMachineId {
+    fn from(id: &str) -> Self {
+        Self(id.to_string())
+    }
+}
+
 /// Marks an entity as a state machine root and tracks active states.
 #[derive(Component, Default, Debug, Clone, Reflect)]
 #[reflect(Component)]

@@ -1,6 +1,6 @@
 pub use crate::components::{
     Active, TerminalState,
-    SubstateOf, Substates, StateMachine, InitialState,
+    SubstateOf, Substates, StateMachine, StateMachineId, InitialState,
     Source, Target, Transitions, AlwaysEdge, EdgeKind,
     Delay,
     ResetEdge, ResetScope,

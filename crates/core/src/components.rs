@@ -66,9 +66,13 @@ pub struct InitialState(#[entities] pub Entity);
 #[relationship(relationship_target = Substates)]
 pub struct SubstateOf(#[entities] pub Entity);
 
-/// Relationship target: children substates.
-#[derive(Component, Default, Debug, PartialEq, Eq)]
+/// Relationship target: children substates, in authored order.
+///
+/// Reflected like Bevy's `Children` so it is written into saved scenes; scene
+/// loading skips relationship hooks and restores both sides from the file.
+#[derive(Component, Default, Debug, PartialEq, Eq, Reflect)]
 #[relationship_target(relationship = SubstateOf, linked_spawn)]
+#[reflect(Component, FromWorld, Default)]
 pub struct Substates(Vec<Entity>);
 
 impl<'a> IntoIterator for &'a Substates {
@@ -92,10 +96,13 @@ pub struct Source(#[entities] pub Entity);
 /// one that no blocker vetoes wins, so a guardless edge placed last acts as the
 /// fallback. A `bsn!` `Transitions [ .. ]` list is applied in authored order;
 /// runtime insertions can pick a position with
-/// `EntityCommands::insert_related::<Source>(index, ..)`. Anything that
-/// serializes a chart must write edges in this order.
-#[derive(Component, Default, Debug, PartialEq, Eq)]
+/// `EntityCommands::insert_related::<Source>(index, ..)`.
+///
+/// Reflected like Bevy's `Children` so the order is written into saved scenes;
+/// scene loading skips relationship hooks and restores both sides from the file.
+#[derive(Component, Default, Debug, PartialEq, Eq, Reflect)]
 #[relationship_target(relationship = Source, linked_spawn)]
+#[reflect(Component, FromWorld, Default)]
 pub struct Transitions(Vec<Entity>);
 
 impl<'a> IntoIterator for &'a Transitions {

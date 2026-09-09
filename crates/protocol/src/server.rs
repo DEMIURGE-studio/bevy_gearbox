@@ -131,11 +131,12 @@ fn build_scene_from_root(world: &mut World, root: Entity) -> bevy::world_seriali
     use bevy::world_serialization::DynamicWorldBuilder;
     let entities = collect_state_machine_entities(world, root);
     let type_registry = world.resource::<AppTypeRegistry>().read();
-    // Reflect-based extraction already leaves out everything without a
-    // `Reflect` impl, which is how `Substates` / `Transitions` (rebuilt from
-    // `SubstateOf` / `Source` on load), `EdgeTimer` and `HistoryState` stay
-    // out of the file. `Active` and `ObservedBy` are reflected for the
-    // editor's sake but are runtime state, so they are denied explicitly.
+    // Reflect-based extraction leaves out everything without a `Reflect`
+    // impl (`EdgeTimer`, `HistoryState`). Relationship targets (`Substates`,
+    // `Transitions`) are reflected and *must* be in the file: scene loading
+    // inserts relationships with hooks skipped, so the target side is not
+    // rebuilt. `Active` and `ObservedBy` are reflected for the editor's sake
+    // but are runtime state, so they are denied explicitly.
     DynamicWorldBuilder::from_world(world, &type_registry)
         .allow_all()
         .deny_component::<gearbox::Active>()
@@ -175,16 +176,13 @@ fn ensure_absolute_assets_path(path: String) -> std::path::PathBuf {
 }
 
 /// Runtime bookkeeping that is never written to a scene and therefore not worth
-/// reporting as "skipped": relationship targets are rebuilt from `SubstateOf` /
-/// `Source` on load, the rest is recreated by `GearboxPlugin`.
+/// reporting as "skipped": `GearboxPlugin` recreates it when the chart runs.
 fn is_runtime_only(type_id: std::any::TypeId) -> bool {
     use std::any::TypeId;
     [
         TypeId::of::<gearbox::Active>(),
         TypeId::of::<gearbox::EdgeTimer>(),
         TypeId::of::<gearbox::HistoryState>(),
-        TypeId::of::<gearbox::Substates>(),
-        TypeId::of::<gearbox::Transitions>(),
         TypeId::of::<bevy::ecs::observer::ObservedBy>(),
     ]
     .contains(&type_id)
@@ -1171,13 +1169,90 @@ mod tests {
         assert_eq!(skipped.len(), 1, "only the unreflected user component is reported: {skipped:?}");
 
         let text = std::fs::read_to_string(&path).unwrap();
-        for present in ["StateMachine", "StateMachineId", "InitialState", "SubstateOf", "Source", "Target", "AlwaysEdge", "Delay", "Name"] {
+        for present in ["StateMachine", "StateMachineId", "InitialState", "SubstateOf", "Substates", "Source", "Transitions", "Target", "AlwaysEdge", "Delay", "Name"] {
             assert!(text.contains(present), "scene has {present}");
         }
-        for absent in ["Active", "EdgeTimer", "ObservedBy", "Substates", "Transitions", "HistoryState"] {
+        for absent in ["Active", "EdgeTimer", "ObservedBy", "HistoryState"] {
             assert!(!text.contains(absent), "scene must not contain runtime-only {absent}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Edge order is the guard priority order, so it has to survive a save and
+    /// a load: `Transitions` is serialized with the chart and restored as-is.
+    #[test]
+    fn saved_scene_round_trips_edge_order() {
+        use bevy::scene::prelude::{bsn, WorldSceneExt};
+        use bevy::world_serialization::serde::WorldDeserializer;
+        use gearbox::{Active, AlwaysEdge, InitialState, StateMachine, Substates, Target, Transitions};
+        use serde::de::DeserializeSeed;
+
+        fn app() -> App {
+            let mut app = App::new();
+            app.add_plugins((
+                MinimalPlugins,
+                bevy::asset::AssetPlugin::default(),
+                bevy::scene::ScenePlugin,
+                gearbox::GearboxPlugin::default(),
+            ));
+            app.register_type::<Name>();
+            app
+        }
+        fn named(world: &mut World, name: &str) -> Entity {
+            let mut q = world.query::<(Entity, &Name)>();
+            q.iter(world).find(|(_, n)| n.as_str() == name).map(|(e, _)| e).expect(name)
+        }
+
+        // Save from world A (before any update, so nothing has fired).
+        let mut a = app();
+        let root = a
+            .world_mut()
+            .spawn_scene(bsn! {
+                StateMachineId("rt")
+                StateMachine InitialState(#Idle)
+                Substates [
+                    #Idle Transitions [
+                        (#First  Target(#A) AlwaysEdge),
+                        (#Second Target(#B) AlwaysEdge),
+                        (#Third  Target(#C) AlwaysEdge),
+                    ],
+                    #A, #B, #C,
+                ]
+            })
+            .unwrap()
+            .id();
+        let mut scene = build_scene_from_root(a.world_mut(), root);
+        scrub_state_machine_ephemeral(&mut scene);
+        let text = serialize_scene(a.world(), &scene).unwrap();
+
+        // Load into a fresh world B.
+        let mut b = app();
+        let dynamic = {
+            let registry = b.world().resource::<AppTypeRegistry>().clone();
+            let registry = registry.read();
+            let mut assets = b.world().resource::<bevy::asset::AssetServer>().clone();
+            let mut de = ron::de::Deserializer::from_str(&text).unwrap();
+            WorldDeserializer { type_registry: &registry, load_from_path: &mut assets }
+                .deserialize(&mut de)
+                .unwrap()
+        };
+        let mut map = bevy::ecs::entity::EntityHashMap::default();
+        dynamic.write_to_world(b.world_mut(), &mut map).unwrap();
+
+        let idle = named(b.world_mut(), "Idle");
+        let order: Vec<String> = b
+            .world()
+            .get::<Transitions>(idle)
+            .expect("Transitions restored from the file")
+            .into_iter()
+            .map(|e| b.world().get::<Name>(*e).unwrap().to_string())
+            .collect();
+        assert_eq!(order, ["First", "Second", "Third"]);
+
+        // The loaded chart runs: init enters Idle, the first always-edge wins.
+        b.update();
+        let a_state = named(b.world_mut(), "A");
+        assert!(b.world().get::<Active>(a_state).is_some(), "first edge in file order fired");
     }
 
     #[test]

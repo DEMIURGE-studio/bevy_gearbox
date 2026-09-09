@@ -58,6 +58,9 @@ released together.
 
 ### Changed
 
+- `Substates` and `Transitions` are reflected and saved with a chart, like
+  Bevy's `Children`, so a scene round-trips its edge order.
+
 - Several always-edges on one state form an ordered list; one fires per parallel
   region per entry (previously one per machine).
 - Examples use `on(..)` entry observers attached in the scene, and run without

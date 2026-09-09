@@ -187,9 +187,13 @@ Run any of them with `--features server` and the editor can connect to it.
 
 Author with `bsn!`. Bevy 0.19 has no `.bsn` asset format yet; a chart the editor
 saves is written as a Bevy `DynamicScene` (`.scn.ron`) and reloaded through
-`bevy_world_serialization`. `Substates` and `Transitions` are rebuilt from each
-child's `SubstateOf` / `Source` on load, in file order, and that order is the
-priority order for guarded edges.
+`bevy_world_serialization`. `Substates` and `Transitions` are saved with the
+chart, like Bevy's `Children`, so edge order (the priority order for guarded
+edges) survives a round trip. A saved scene holds structure, not runtime state:
+`Active`, timers, history and `on(..)` observers are left out. Your own
+components on states and edges are included when they derive `Reflect` with
+`#[reflect(Component)]` and are registered with `register_type`; anything else
+is skipped and the editor logs what it left out.
 
 ## Version Table
 

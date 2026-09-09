@@ -2,7 +2,7 @@
 
 Gearbox state machines are entity hierarchies: **states are entities**,
 **transitions are entities**, and everything lives in the ECS. You author them
-as [`bsn`] scenes which spawns the whole tree atomically. 
+as `bsn!` scenes, which spawn the whole tree in one go.
 
 This guide builds a small character chart step by step:
 
@@ -225,7 +225,7 @@ Not every edge needs a message.
 - **`AlwaysEdge`** fires as soon as its source state becomes active. Use it to
   auto-advance a chart with no external trigger.
 - Add a **`Delay`** to any edge to fire it after a duration while the source
-  stays active - `Delay::from_secs_f32(0.8)` for an 0.8s cooldown.
+  stays active - `Delay::from_secs_f32(0.8)` for a 0.8s cooldown.
 - A **`TerminalState`** emits a `Done` message addressed to its parent when
   entered, so a `MessageEdge::<Done>` on the parent can transition out once a
   sub-chart finishes.
@@ -298,9 +298,9 @@ no damage is applied. Edges are **external** by default; mark them
 
 ### Guards: ordered candidates, first passing guard wins
 
-Gearbox follows XState here: there is no "branch" node. A conditional transition
-is several edges for the same trigger, listed in priority order, each carrying
-whatever guard it needs. Every matching edge along the active leaf's ancestor
+A conditional transition is several edges for the same trigger, listed in
+priority order, each carrying whatever guard it needs, the same shape as an
+XState transition array. Every matching edge along the active leaf's ancestor
 chain is proposed as a candidate (deeper state first, then `Transitions`
 order); guards veto candidates; the first survivor is applied. A guardless
 edge last in the list is the fallback.

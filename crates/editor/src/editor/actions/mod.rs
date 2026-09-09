@@ -36,18 +36,23 @@ pub fn refresh_index(_store: &mut EditorStore, _filter: IndexFilter) {
 }
 
 // Request events, handled by observers in `plugin.rs`.
+/// Connect to the given protocol endpoint.
 #[derive(Debug, Clone, Event)]
 pub struct ConnectRequested { pub endpoint: String }
 
+/// Drop the connection and clear the session.
 #[derive(Debug, Clone, Event)]
 pub struct DisconnectRequested;
 
+/// Reconnect to the last endpoint.
 #[derive(Debug, Clone, Event)]
 pub struct ReconnectRequested;
 
+/// Re-request the list of machines, filtered by `query`.
 #[derive(Debug, Clone, Event)]
 pub struct RefreshIndexRequested { pub query: String }
 
+/// Open a machine on the board and subscribe to its watch stream.
 #[derive(Debug, Clone, Event)]
 pub struct OpenRequested { pub entity: EntityId }
 
@@ -103,6 +108,7 @@ pub fn on_open_requested(
     proto_cmd.write(ClientCommand::FetchGraph { id: evt.entity.0 });
 }
 
+/// Stop watching a machine without closing its document.
 #[derive(Debug, Clone, Event)]
 pub struct UnsubscribeRequested { pub entity: EntityId }
 
@@ -113,6 +119,7 @@ pub fn on_unsubscribe_requested(evt: On<UnsubscribeRequested>, mut proto_net: Me
     proto_net.write(NetCommand::StopMachine { id: evt.entity.0 });
 }
 
+/// Close a machine's document and stop watching it.
 #[derive(Debug, Clone, Event)]
 pub struct CloseRequested { pub entity: EntityId }
 
@@ -149,6 +156,7 @@ pub fn on_close_requested(
     close_doc_and_unsubscribe(evt.entity, &mut workspace, &mut docs, &mut proto_net);
 }
 
+/// Save the subtree under `target` as a scene plus layout sidecar, via a file dialog.
 #[derive(Debug, Clone, Event)]
 pub struct SaveAsRequested { pub doc: EntityId, pub target: EntityId }
 
@@ -202,6 +210,7 @@ pub fn on_save_as_requested(
     }
 }
 
+/// Save every substate that carries a `StateMachineId` to its own scene.
 #[derive(Debug, Clone, Event)]
 pub struct SaveSubstatesRequested { pub target: EntityId }
 
@@ -217,12 +226,15 @@ pub fn on_save_substates_requested(
     });
 }
 
+/// Insert a `Delay` of `seconds` on an edge.
 #[derive(Debug, Clone, Event)]
 pub struct SetEdgeDelayRequested { pub target: EntityId, pub seconds: f32 }
 
+/// Remove the `Delay` from an edge.
 #[derive(Debug, Clone, Event)]
 pub struct ClearEdgeDelayRequested { pub target: EntityId }
 
+/// Set an edge's `EdgeKind` to internal or external.
 #[derive(Debug, Clone, Event)]
 pub struct SetEdgeKindRequested { pub target: EntityId, pub internal: bool }
 

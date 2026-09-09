@@ -1,6 +1,6 @@
 //! Optional bevy_gauge integration — behind the `gauge` feature.
 //!
-//! [`Delay`] is an [`AttributeDerived`] component: syncs to it's entities
+//! [`Delay`] is an [`AttributeDerived`] component: it syncs to its entity's
 //! `Delay` attribute.
 
 use std::time::Duration;

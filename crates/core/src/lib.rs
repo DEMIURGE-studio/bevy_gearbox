@@ -104,25 +104,12 @@ pub struct GearboxSchedule;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GearboxSet;
 
-/// System sets within [`GearboxSchedule`], executed in order each iteration.
+/// System sets within [`GearboxSchedule`], declared in the order they run
+/// each iteration.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GearboxPhase {
-    /// Internal: proposes candidate [`TransitionMessage`]s (always-edges on
-    /// `Changed<Active>`, elapsed delays, message edges, terminal-done) and
-    /// writes [`Matched`](crate::messages::Matched) messages.
-    EdgeDetectPhase,
-    /// User guard systems run here. Use
-    /// [`MessageMutator<TransitionMessage>`] to set `blocked = true` on
-    /// candidates that should not be applied; a vetoed candidate falls
-    /// through to the next one in its group.
-    BlockerPhase,
-    /// User side-effect systems run here. Read
-    /// [`Matched<M>`](crate::messages::Matched) and check
-    /// [`BlockedEdges`](crate::resolve::BlockedEdges) to skip blocked
-    /// transitions.
-    SideEffectPhase,
-    /// Internal: reads surviving (non-blocked) transition messages, updates
-    /// [`StateMachine`], and inserts/removes [`Active`] components.
+    /// Internal: applies the surviving (non-blocked) transition messages,
+    /// updates [`StateMachine`], and inserts/removes [`Active`] components.
     TransitionPhase,
     /// User systems that react to states being exited.
     /// Query `RemovedComponents<Active>` to detect exits.
@@ -132,9 +119,23 @@ pub enum GearboxPhase {
     EntryPhase,
     /// Syncs gauge [`WriteBack`](bevy_gauge::prelude::WriteBack) and
     /// [`AttributeDerived`](bevy_gauge::prelude::AttributeDerived) components
-    /// so that derived values are current before edge checks.
+    /// so that derived values are current before edge detection.
     #[cfg(feature = "gauge")]
     GaugeSync,
+    /// Internal: proposes candidate [`TransitionMessage`]s (always-edges on
+    /// `Changed<Active>`, elapsed delays, message edges, terminal-done) and
+    /// writes [`Matched`] messages.
+    EdgeDetectPhase,
+    /// User guard systems run here. Use
+    /// [`MessageMutator<TransitionMessage>`] to set `blocked = true` on
+    /// candidates that should not be applied; a vetoed candidate falls
+    /// through to the next one in its group.
+    BlockerPhase,
+    /// User side-effect systems run here. Read
+    /// [`Matched<M>`](crate::messages::Matched) and check
+    /// [`BlockedEdges`] to skip blocked
+    /// transitions.
+    SideEffectPhase,
 }
 
 // ---------------------------------------------------------------------------

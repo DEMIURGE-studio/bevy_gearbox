@@ -30,9 +30,18 @@ impl From<&str> for StateMachineId {
     }
 }
 
+/// Exposes this app's state machines to the gearbox editor.
+///
+/// Installs Bevy's `RemotePlugin` and `RemoteHttpPlugin`, registers the
+/// `editor.*` RPCs, and tracks transitions for the `+watch` streams. Intended
+/// for development: the file RPCs read and write paths under the working
+/// directory, so keep `bind_address` on loopback.
 #[derive(Default)]
 pub struct ServerPlugin {
+    /// Extra HTTP headers the remote server requires on every request
+    /// (forwarded to `RemoteHttpPlugin::with_headers`).
     pub headers: Vec<(String, String)>,
+    /// Address to listen on. Defaults to `127.0.0.1:15703`.
     pub bind_address: Option<SocketAddr>,
 }
 

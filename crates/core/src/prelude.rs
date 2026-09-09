@@ -21,7 +21,7 @@ pub use crate::commands::{
     TransitionExt, InitStateMachine,
     GearboxCommandsExt, BuildEntityEvent,
 };
-pub use crate::{GearboxSchedule, GearboxPhase, GearboxSet};
+pub use crate::{GearboxPlugin, GearboxSchedule, GearboxPhase, GearboxSet};
 pub use crate::resolve::{
     TransitionMessage, BlockedEdges, CandidateGroups,
     EnterState, ExitState,

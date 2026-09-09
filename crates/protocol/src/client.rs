@@ -356,6 +356,7 @@ pub fn on_set_initial_state(
 // =========================
 
 #[derive(Message)]
+/// Requests the UI writes; serviced synchronously on the Tokio runtime.
 pub enum ClientCommand {
     RefreshMachines,
     SetUrl { url: String },
@@ -365,6 +366,7 @@ pub enum ClientCommand {
 }
 
 #[derive(Message, Clone)]
+/// Replies to [`ClientCommand`]s and other one-shot results, read by the UI.
 pub enum ClientMessage {
     RefreshResult(Result<Vec<MachineSummary>, String>),
     GraphResult { id: u64, graph: serde_json::Value },
@@ -462,6 +464,12 @@ fn client_commands(
 }
 
 #[derive(Default)]
+/// Editor-side networking: a [`Client`] resource on a Tokio runtime, watch
+/// tasks that stream server events into Bevy as [`NetMessage`]s, and observers
+/// that turn the [`crate::events`] a UI triggers into RPC calls.
+///
+/// The endpoint comes from `GEARBOX_PROTOCOL_URL`, defaulting to
+/// `http://127.0.0.1:15703`.
 pub struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
@@ -791,6 +799,7 @@ fn ensure_watch_manager(rt: &tokio::runtime::Runtime, mgr: &mut WatchManager) {
 }
 
 #[derive(Message, Clone)]
+/// Events forwarded from the server's `+watch` streams.
 pub enum NetMessage {
     Discovery(Vec<MachineSummary>),
     Machine { id: u64, events: Vec<Value> },
@@ -799,6 +808,7 @@ pub enum NetMessage {
 }
 
 #[derive(Message)]
+/// Start/stop instructions for the watch tasks.
 pub enum NetCommand {
     StartDiscovery,
     StopDiscovery,

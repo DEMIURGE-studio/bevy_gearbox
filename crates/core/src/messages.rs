@@ -324,7 +324,7 @@ fn propose_at_state<M: GearboxMessage>(
 // Done message — emitted when a TerminalState is entered
 // ---------------------------------------------------------------------------
 
-/// Emitted when a [`TerminalState`](crate::TerminalState) is entered.
+/// Emitted when a [`TerminalState`] is entered.
 /// Targets the parent state so `MessageEdge<Done>` on the parent can fire.
 #[derive(Message, Clone, Debug, Reflect)]
 pub struct Done {

@@ -11,8 +11,8 @@
 //! └── Dead       --Revive--> Alive
 //! ```
 //!
-//! There is no "branch" node. `Alive` simply has three `MessageEdge::<Hit>`
-//! edges in its `Transitions [ .. ]` list. Every one of them is proposed when a
+//! `Alive` has three `MessageEdge::<Hit>` edges in its `Transitions [ .. ]`
+//! list, one per outcome. Every one of them is proposed when a
 //! `Hit` arrives; the guard systems veto the ones whose condition fails; the
 //! first survivor in list order is taken. The guardless `Hurt` edge is last,
 //! so it is the fallback.

@@ -20,6 +20,7 @@ pub struct InstalledTransitions(pub HashSet<TypeId>);
 #[derive(Resource, Default)]
 pub struct InstalledStateComponents(pub HashSet<TypeId>);
 
+/// Deduplication resource for registered Bevy `States` bridges.
 #[derive(Resource, Default)]
 pub struct InstalledStateBridges(pub HashSet<TypeId>);
 
@@ -112,27 +113,36 @@ pub fn bridge_to_bevy_state<S: States + bevy::state::state::FreelyMutableState +
 // Inventory auto-installers
 // ---------------------------------------------------------------------------
 
+/// Submitted by `#[derive(GearboxMessage)]`; installs the message listener.
+#[doc(hidden)]
 pub struct TransitionInstaller { pub install: fn(&mut App) }
 inventory::collect!(TransitionInstaller);
 
+/// Submitted by `#[state_component]`; installs the state-component systems.
+#[doc(hidden)]
 pub struct StateInstaller { pub install: fn(&mut App) }
 inventory::collect!(StateInstaller);
 
+/// Submitted by `#[state_bridge]`; installs the Bevy `States` bridge.
+#[doc(hidden)]
 pub struct StateBridgeInstaller { pub install: fn(&mut App) }
 inventory::collect!(StateBridgeInstaller);
 
 // ---------------------------------------------------------------------------
-// Standalone register_* wrappers (used as fn pointers by inventory macros)
+// Standalone register_* wrappers (used as fn pointers by the macros)
 // ---------------------------------------------------------------------------
 
+#[doc(hidden)]
 pub fn register_transition<M: GearboxMessage>(app: &mut App) {
     app.register_transition::<M>();
 }
 
+#[doc(hidden)]
 pub fn register_state_component<T: Component<Mutability = Mutable> + Clone + 'static>(app: &mut App) {
     app.register_state_component::<T>();
 }
 
+#[doc(hidden)]
 pub fn register_state_bridge<S: States + bevy::state::state::FreelyMutableState + Default + Component + Clone + 'static>(app: &mut App) {
     app.register_state_bridge::<S>();
 }

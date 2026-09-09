@@ -158,7 +158,7 @@ pub struct EnterState {
 /// Use `On<ExitState>` observers on state entities to react.
 ///
 /// For schedule-phase or Update-phase systems, prefer querying
-/// [`Active`](crate::components::Active) with `RemovedComponents`.
+/// [`Active`] with `RemovedComponents`.
 #[derive(EntityEvent, Clone, Debug)]
 pub struct ExitState {
     #[event_target]

@@ -64,13 +64,7 @@ fn manual_transition_chains_with_always_edge() {
     assert!(app.world().get::<StateMachine>(machine).unwrap().is_active(&a));
 
     // Manually push A -> B; the AlwaysEdge should carry on to C
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, b, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -102,13 +96,7 @@ fn transition_from_inactive_source_is_ignored() {
     app.update();
 
     // b is not active — this message should be ignored
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: b,
-        target: c,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, b, c, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -157,13 +145,7 @@ fn self_transition_exits_and_reenters() {
     app.update();
     let count_after_init = app.world().resource::<EntryCount>().0;
 
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: a,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, a, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -223,13 +205,7 @@ fn descendant_to_ancestor_self_transition_refires_changed_active() {
 
     // Move to B (sibling transition under P; P stays active and is NOT the
     // target, so its Active is untouched -> no Changed for P).
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, b, None));
     app.update();
     assert!(app.world().get::<StateMachine>(machine).unwrap().is_active(&b));
     let before_bounce = app.world().resource::<PChanged>().0;
@@ -238,13 +214,7 @@ fn descendant_to_ancestor_self_transition_refires_changed_active() {
     // The bounce: descendant B -> ancestor P (external, edge = None). P is the
     // target, so its Active is re-inserted to fire Changed<Active>; the machine
     // then drills back to initial A.
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: b,
-        target: p,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, b, p, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -311,13 +281,7 @@ fn external_reentry_resignals_whole_subtree() {
 
     // External L -> M (edge = None). M re-drills to its initial L; L stays active
     // but must be re-entered as part of M's subtree.
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: l,
-        target: m,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, l, m, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -374,13 +338,7 @@ fn internal_reentry_does_not_resignal_subtree() {
     app.update();
     let before = app.world().resource::<LChanged>().0;
 
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: l,
-        target: m,
-        edge: Some(edge),
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, l, m, Some(edge)));
     app.update();
 
     assert_eq!(

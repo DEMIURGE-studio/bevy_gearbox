@@ -12,6 +12,8 @@
 //!      ancestor-targeting edge) authored in a single `bsn!` scope.
 //!   6. Cross-scope references threaded through scene-function `EntityTemplate`
 //!      parameters (BSN name scopes are per-`bsn!`).
+//!   7. `Transitions [ .. ]` and `Substates [ .. ]` keep their authored order,
+//!      which is the priority order for guarded candidates.
 //!
 //! The edges use `AlwaysEdge`; the structure (`Source`/`Target`/marker) is the
 //! same for `MessageEdge<M>`.
@@ -252,4 +254,42 @@ fn cross_scope_reference_via_entity_template_param() {
         home,
         "caller's #Home reference threaded across the scene-function boundary"
     );
+}
+
+// 7. Relationship lists keep authored order. Edge order is the candidate
+//    priority order, so this is load-bearing, not cosmetic.
+#[test]
+fn relationship_lists_keep_authored_order() {
+    let mut app = test_app();
+    let world = app.world_mut();
+
+    fn names<R>(world: &World, parent: Entity) -> Vec<String>
+    where
+        R: bevy::ecs::component::Component,
+        for<'a> &'a R: IntoIterator<Item = &'a Entity>,
+    {
+        collect::<R>(world, parent)
+            .into_iter()
+            .map(|e| world.entity(e).get::<Name>().unwrap().to_string())
+            .collect()
+    }
+
+    for _ in 0..10 {
+        let root = world
+            .spawn_scene(bsn! {
+                StateMachine
+                Substates [ #S1, #S2, #S3, #S4, #S5 ]
+                Transitions [
+                    (#T1 Target(#S1) AlwaysEdge),
+                    (#T2 Target(#S2) AlwaysEdge),
+                    (#T3 Target(#S3) AlwaysEdge),
+                    (#T4 Target(#S4) AlwaysEdge),
+                    (#T5 Target(#S5) AlwaysEdge),
+                ]
+            })
+            .unwrap()
+            .id();
+        assert_eq!(names::<Substates>(world, root), ["S1", "S2", "S3", "S4", "S5"]);
+        assert_eq!(names::<Transitions>(world, root), ["T1", "T2", "T3", "T4", "T5"]);
+    }
 }

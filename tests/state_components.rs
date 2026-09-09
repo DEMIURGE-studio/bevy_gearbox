@@ -67,13 +67,7 @@ fn state_component_removed_on_exit() {
     assert!(app.world().get::<Speed>(machine).is_some());
 
     // Transition A -> B
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, b, None));
     app.update();
 
     assert!(
@@ -111,13 +105,7 @@ fn state_inactive_component_removed_on_enter_restored_on_exit() {
     );
 
     // Transition A -> B
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, b, None));
     app.update();
 
     // After exiting A, CanMove should be restored
@@ -154,13 +142,7 @@ fn different_state_components_swap_on_transition() {
     assert!(app.world().get::<Jumping>(machine).is_none());
 
     // Transition running -> jumping
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: running,
-        target: jumping,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, running, jumping, None));
     app.update();
 
     assert!(
@@ -217,13 +199,7 @@ fn root_sourced_transition_removes_state_component_from_intermediate_parent() {
     );
 
     // Root-sourced transition: machine → B (simulates an any-state edge).
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: machine,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, machine, b, None));
     app.update();
 
     assert!(

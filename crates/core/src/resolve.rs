@@ -1,4 +1,4 @@
-use bevy::platform::collections::HashSet;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::components::*;
@@ -6,21 +6,54 @@ use crate::helpers::*;
 use crate::history::*;
 
 // ---------------------------------------------------------------------------
-// TransitionMessage / PendingCount
+// TransitionMessage / PendingCount / CandidateGroups
 // ---------------------------------------------------------------------------
 
-/// A pending transition to be resolved by the schedule.
+/// A pending transition, proposed by edge detection (or by machine init and
+/// elapsed delays) and applied by [`resolve_transitions`].
+///
+/// Several candidates can compete for one trigger. Every edge along the
+/// active leaf's ancestor chain that matches a message is proposed with the
+/// same `group` and its own `rank`. Blocker systems veto candidates by setting
+/// `blocked`; [`select_transitions`] then keeps the lowest-ranked survivor in
+/// each group and blocks the rest. Guards are therefore "ordered candidates,
+/// first passing guard wins", and a guardless edge placed last in
+/// [`Transitions`] is the fallback.
 #[derive(Message, Debug, Clone)]
 pub struct TransitionMessage {
     pub machine: Entity,
     pub source: Entity,
     pub target: Entity,
-    /// The edge entity that triggered this transition (if known).
-    /// Used for [`EdgeKind`] and [`ResetEdge`] checks.
+    /// The edge entity that proposed this transition, if any. Used for
+    /// [`EdgeKind`], [`ResetEdge`], and [`BlockedEdges`] bookkeeping.
     pub edge: Option<Entity>,
-    /// Set to `true` by blocker systems in [`BlockerPhase`](crate::GearboxPhase::BlockerPhase)
-    /// to prevent this transition from being applied.
+    /// Set to `true` by blocker systems in
+    /// [`BlockerPhase`](crate::GearboxPhase::BlockerPhase) to veto this
+    /// candidate. [`select_transitions`] also sets it on candidates that lost
+    /// to a better-ranked one in the same group.
     pub blocked: bool,
+    /// Candidates competing for the same trigger in the same region share a
+    /// group. Group `0` is reserved for standalone transitions that compete
+    /// with nothing (see [`TransitionMessage::new`]).
+    pub group: u64,
+    /// Priority within the group, lowest wins: (depth rank, index in the
+    /// source's [`Transitions`]). Deeper states rank first.
+    pub rank: (u32, u32),
+}
+
+impl TransitionMessage {
+    /// A standalone transition that competes with no other candidate.
+    pub fn new(machine: Entity, source: Entity, target: Entity, edge: Option<Entity>) -> Self {
+        Self {
+            machine,
+            source,
+            target,
+            edge,
+            blocked: false,
+            group: 0,
+            rank: (0, 0),
+        }
+    }
 }
 
 /// Tracks how much work was done during the current schedule iteration.
@@ -32,10 +65,24 @@ pub struct TransitionMessage {
 #[derive(Resource, Default)]
 pub struct PendingCount(pub usize);
 
-/// Set of edge entities whose [`TransitionMessage`] was marked `blocked`
-/// this iteration. Populated by [`collect_blocked_edges`] after
+/// Hands out [`TransitionMessage::group`] ids to edge-detection systems.
+#[derive(Resource, Default)]
+pub struct CandidateGroups(u64);
+
+impl CandidateGroups {
+    /// A fresh group id (never `0`).
+    pub fn next(&mut self) -> u64 {
+        self.0 += 1;
+        self.0
+    }
+}
+
+/// Set of edge entities whose [`TransitionMessage`] ended this iteration
+/// `blocked`, either vetoed by a blocker system or beaten by a better-ranked
+/// candidate in the same group. Populated by [`select_transitions`] after
 /// [`BlockerPhase`](crate::GearboxPhase::BlockerPhase). Side-effect systems
-/// check this to skip orphaned [`Matched`](crate::messages::Matched) messages.
+/// check this to skip the [`Matched`](crate::messages::Matched) messages of
+/// transitions that will not be applied.
 #[derive(Resource, Default)]
 pub struct BlockedEdges(pub HashSet<Entity>);
 
@@ -51,15 +98,38 @@ pub(crate) fn reset_pending_count(mut pending: ResMut<PendingCount>) {
     pending.0 = 0;
 }
 
-/// After [`BlockerPhase`](crate::GearboxPhase::BlockerPhase), collect all
-/// blocked edge entities into [`BlockedEdges`] so that side-effect systems
-/// can skip orphaned [`Matched`](crate::messages::Matched) messages.
-pub(crate) fn collect_blocked_edges(
-    mut reader: MessageReader<TransitionMessage>,
+/// After [`BlockerPhase`](crate::GearboxPhase::BlockerPhase): within each
+/// candidate group keep the lowest-ranked unblocked transition and block the
+/// others, then record every blocked edge in [`BlockedEdges`].
+pub(crate) fn select_transitions(
+    mut candidates: MessageMutator<TransitionMessage>,
     mut blocked: ResMut<BlockedEdges>,
 ) {
     blocked.0.clear();
-    for msg in reader.read() {
+    let mut msgs: Vec<&mut TransitionMessage> = candidates.read().collect();
+
+    let mut best: HashMap<u64, (u32, u32)> = HashMap::new();
+    for msg in msgs.iter() {
+        if msg.blocked || msg.group == 0 {
+            continue;
+        }
+        best.entry(msg.group)
+            .and_modify(|r| {
+                if msg.rank < *r {
+                    *r = msg.rank;
+                }
+            })
+            .or_insert(msg.rank);
+    }
+
+    for msg in msgs.iter_mut() {
+        if !msg.blocked {
+            if let Some(winner) = best.get(&msg.group) {
+                if msg.rank != *winner {
+                    msg.blocked = true;
+                }
+            }
+        }
         if msg.blocked {
             if let Some(edge) = msg.edge {
                 blocked.0.insert(edge);
@@ -356,79 +426,62 @@ pub(crate) fn resolve_transitions(
     }
 }
 
-/// Resolve the target entity for an edge. If the edge has a [`BranchTransition`],
-/// walk its arms in order and take the first eligible; otherwise use the
-/// fallback. If no branch is present, fall back to the plain [`Target`] component.
-pub(crate) fn resolve_edge_target(
-    edge: Entity,
-    q_branch: &Query<&BranchTransition>,
-    q_target: &Query<&Target>,
-) -> Option<Entity> {
-    if let Ok(branch) = q_branch.get(edge) {
-        // TODO: branch arm conditions — for now, first arm wins or fallback.
-        if let Some(arm) = branch.arms.first() {
-            return Some(arm.target);
-        }
-        return Some(branch.otherwise);
-    }
-    q_target.get(edge).ok().map(|t| t.0)
-}
-
-/// Check if any AlwaysEdge is eligible on states that were just entered
-/// or re-entered (`Changed<Active>`). Fires once per state entry, aligned
-/// with XState / statechart semantics.
+/// Propose every undelayed [`AlwaysEdge`] on states that were just entered or
+/// re-entered (`Changed<Active>`). Candidates within one parallel region share
+/// a group, ranked deeper-state-first and then by [`Transitions`] order, so
+/// exactly one always-edge per region survives [`select_transitions`] (the
+/// XState `always: [ .. ]` list). Fires once per state entry.
 ///
-/// Increments [`PendingCount`] for each transition it queues.
+/// Increments [`PendingCount`] for each candidate it queues.
 pub(crate) fn check_always_edges(
     mut writer: MessageWriter<TransitionMessage>,
     mut pending: ResMut<PendingCount>,
+    mut groups: ResMut<CandidateGroups>,
     q_active: Query<(Entity, &Active), Changed<Active>>,
     q_transitions: Query<&Transitions>,
     q_always: Query<(), With<AlwaysEdge>>,
     q_target: Query<&Target>,
-    q_branch: Query<&BranchTransition>,
     q_source: Query<&Source>,
     q_delay: Query<(), With<Delay>>,
+    q_substate_of: Query<&SubstateOf>,
+    q_initial: Query<&InitialState>,
+    q_children: Query<&Substates>,
 ) {
-    let mut states_to_check: Vec<(Entity, Entity)> = Vec::new(); // (state, machine)
+    let mut region_groups: HashMap<(Entity, Entity), u64> = HashMap::new();
+
     for (state, active) in &q_active {
-        states_to_check.push((state, active.machine));
-    }
-    states_to_check.dedup();
-
-    let mut fired_machines: HashSet<Entity> = HashSet::new();
-
-    for (state, machine_entity) in states_to_check {
-        if fired_machines.contains(&machine_entity) {
-            continue;
-        }
         let Ok(transitions) = q_transitions.get(state) else {
             continue;
         };
-        for &edge in transitions {
-            if q_always.get(edge).is_err() {
+        let machine = active.machine;
+        let mut group = None;
+        let depth = depth_rank(state, &q_substate_of);
+
+        for (index, &edge) in transitions.into_iter().enumerate() {
+            if !q_always.contains(edge) || q_delay.contains(edge) {
                 continue;
             }
-            // Skip delayed edges — the timer system handles them
-            if q_delay.get(edge).is_ok() {
-                continue;
-            }
-            let Some(target) = resolve_edge_target(edge, &q_branch, &q_target) else {
+            let Ok(target) = q_target.get(edge) else {
                 continue;
             };
-
-            let source_state = q_source.get(edge).map(|s| s.0).unwrap_or(state);
+            let group = *group.get_or_insert_with(|| {
+                let region = region_root(state, machine, &q_substate_of, &q_initial, &q_children);
+                *region_groups
+                    .entry((machine, region))
+                    .or_insert_with(|| groups.next())
+            });
+            let source = q_source.get(edge).map(|s| s.0).unwrap_or(state);
 
             writer.write(TransitionMessage {
-                machine: machine_entity,
-                source: source_state,
-                target,
+                machine,
+                source,
+                target: target.0,
                 edge: Some(edge),
                 blocked: false,
+                group,
+                rank: (depth, index as u32),
             });
             pending.0 += 1;
-            fired_machines.insert(machine_entity);
-            break;
         }
     }
 }

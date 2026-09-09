@@ -11,13 +11,20 @@
 //!   EntryPhase       <- user systems reacting to Added<Active>
 //!   GaugeSync        <- (gauge feature) sync WriteBack + AttributeDerived
 //!   apply_deferred
-//!   EdgeDetectPhase  <- check_always_edges, message_edge_listener, emit_terminal_done
+//!   EdgeDetectPhase  <- emit_terminal_done, check_always_edges,
+//!                       propose_delayed_transitions, message_edge_listener::<M>
+//!                       (each proposes candidate TransitionMessages)
 //!   apply_deferred
-//!   BlockerPhase     <- user blocker systems (MessageMutator<TransitionMessage>)
-//!   collect_blocked  <- populates BlockedEdges resource
+//!   BlockerPhase     <- user guard systems veto candidates (MessageMutator<TransitionMessage>)
+//!   select_transitions <- keeps the best surviving candidate per group, fills BlockedEdges
 //!   apply_deferred
 //!   SideEffectPhase  <- user side-effect systems (read Matched<M>, check BlockedEdges)
 //! ```
+//!
+//! Guards follow the statechart model: every edge that matches a trigger along
+//! the active leaf's ancestor chain is a candidate, ranked deeper-state-first
+//! and then by [`Transitions`] order; blockers veto, and the first survivor is
+//! applied in the next iteration's `TransitionPhase`.
 //!
 //! After the schedule converges, [`EnterState`] / [`ExitState`] entity events
 //! are triggered for observer-based consumers.
@@ -74,7 +81,7 @@ pub use registration::{
     InstalledStateBridges, InstalledStateComponents, InstalledTransitions, RegistrationAppExt,
     StateBridgeInstaller, StateInstaller, TransitionInstaller,
 };
-pub use resolve::{BlockedEdges, EnterState, ExitState, TransitionMessage};
+pub use resolve::{BlockedEdges, CandidateGroups, EnterState, ExitState, TransitionMessage};
 pub use state_component::{
     state_component_enter, state_component_exit, state_inactive_component_enter,
     state_inactive_component_exit, StateComponent, StateInactiveComponent,
@@ -101,13 +108,14 @@ pub struct GearboxSet;
 /// System sets within [`GearboxSchedule`], executed in order each iteration.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GearboxPhase {
-    /// Internal: detects eligible edges (always-edges on `Changed<Active>`,
-    /// message edges, terminal-done) and writes [`TransitionMessage`]s +
-    /// [`Matched`](crate::messages::Matched) messages.
+    /// Internal: proposes candidate [`TransitionMessage`]s (always-edges on
+    /// `Changed<Active>`, elapsed delays, message edges, terminal-done) and
+    /// writes [`Matched`](crate::messages::Matched) messages.
     EdgeDetectPhase,
-    /// User blocker systems run here. Use
+    /// User guard systems run here. Use
     /// [`MessageMutator<TransitionMessage>`] to set `blocked = true` on
-    /// transitions that should not be applied.
+    /// candidates that should not be applied; a vetoed candidate falls
+    /// through to the next one in its group.
     BlockerPhase,
     /// User side-effect systems run here. Read
     /// [`Matched<M>`](crate::messages::Matched) and check
@@ -164,13 +172,12 @@ fn enqueue_machine_init(
     mut writer: MessageWriter<TransitionMessage>,
 ) {
     for (entity, initial) in &q_new_machines {
-        writer.write(TransitionMessage {
-            machine: entity,
-            source: entity,
-            target: initial.map(|i| i.0).unwrap_or(entity),
-            edge: None,
-            blocked: false,
-        });
+        writer.write(TransitionMessage::new(
+            entity,
+            entity,
+            initial.map(|i| i.0).unwrap_or(entity),
+            None,
+        ));
     }
 }
 
@@ -308,16 +315,18 @@ impl Plugin for GearboxPlugin {
 
         app.add_message::<TransitionMessage>()
             .init_resource::<PendingCount>()
+            .init_resource::<resolve::CandidateGroups>()
             .init_resource::<resolve::BlockedEdges>()
+            .init_resource::<delay::ElapsedDelays>()
             .init_resource::<IterationCap>();
 
         let mut schedule = Schedule::new(GearboxSchedule);
-        // TransitionPhase runs FIRST so that init messages (from
-        // enqueue_machine_init) and delay-timer messages (from
-        // tick_delay_timers) are resolved before EdgeDetect runs.
-        // EdgeDetect then proposes new transitions from the newly-active
-        // states, which pass through Blocker → SideEffect and are resolved
-        // in the NEXT iteration's TransitionPhase.
+        // TransitionPhase runs first so that init messages (from
+        // enqueue_machine_init) are resolved before EdgeDetect runs.
+        // EdgeDetect then proposes candidate transitions from the newly
+        // active states (and from delays that elapsed this frame), which pass
+        // through Blocker → select → SideEffect and are resolved in the next
+        // iteration's TransitionPhase.
         #[cfg(not(feature = "gauge"))]
         schedule.configure_sets(
             (
@@ -372,7 +381,7 @@ impl Plugin for GearboxPlugin {
             (
                 // Reset work counter at the start of each iteration.
                 resolve::reset_pending_count.before(GearboxPhase::TransitionPhase),
-                // Resolve init/delay/previous-iteration edge messages.
+                // Resolve init messages and the previous iteration's winners.
                 resolve::resolve_transitions.in_set(GearboxPhase::TransitionPhase),
                 // Flush Active insert/remove so Exit/Entry phases see changes.
                 ApplyDeferred
@@ -386,17 +395,19 @@ impl Plugin for GearboxPlugin {
                 ApplyDeferred
                     .after(GearboxPhase::EntryPhase)
                     .before(GearboxPhase::EdgeDetectPhase),
-                // Edge detection: propose new transitions.
+                // Edge detection: propose candidate transitions.
                 messages::emit_terminal_done
                     .in_set(GearboxPhase::EdgeDetectPhase)
                     .before(resolve::check_always_edges),
                 resolve::check_always_edges.in_set(GearboxPhase::EdgeDetectPhase),
+                delay::propose_delayed_transitions.in_set(GearboxPhase::EdgeDetectPhase),
                 // Flush so blocker systems see edge-detect commands.
                 ApplyDeferred
                     .after(GearboxPhase::EdgeDetectPhase)
                     .before(GearboxPhase::BlockerPhase),
-                // After blockers, collect which edges were blocked.
-                resolve::collect_blocked_edges
+                // After blockers, pick one winner per candidate group and
+                // record every blocked edge.
+                resolve::select_transitions
                     .after(GearboxPhase::BlockerPhase)
                     .before(GearboxPhase::SideEffectPhase),
                 // Flush before side effects.
@@ -406,13 +417,10 @@ impl Plugin for GearboxPlugin {
             ),
         );
 
-        // Outer driver: detect new machines, tick delay timers (so their
-        // transition messages are in the buffer before the loop runs), run
-        // the loop, then flush entity events for observer users.
-        //
-        // Ticking delays before the loop means a delay that finishes this
-        // frame gets its transition applied in the same frame, and any
-        // cascade it triggers resolves in the same frame too.
+        // Outer driver: detect new machines, tick delay timers (so elapsed
+        // delays are proposed in the loop's first iteration), run the loop,
+        // then flush entity events for observer users. A delay that finishes
+        // this frame is applied this frame, along with any cascade it starts.
         app.add_systems(
             outer,
             (

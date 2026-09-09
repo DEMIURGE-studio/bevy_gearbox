@@ -101,13 +101,7 @@ fn transition_within_parallel_region_preserves_siblings() {
     assert!(state.active_leaves.contains(&b1));
 
     // Transition within region A only
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a1,
-        target: a2,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a1, a2, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -148,13 +142,7 @@ fn exiting_parallel_parent_exits_all_children() {
     );
 
     // Transition parallel -> d
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: parallel,
-        target: d,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, parallel, d, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -272,13 +260,7 @@ fn parallel_root_machine_with_sequential_subregions() {
     assert!(state.active.contains(&region_b));
 
     // Transition within region A only — region B should be untouched.
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a1,
-        target: a2,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a1, a2, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();

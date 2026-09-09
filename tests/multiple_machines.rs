@@ -48,13 +48,7 @@ fn two_machines_independent_state() {
     assert!(app.world().get::<StateMachine>(m2).unwrap().is_active(&m2_x));
 
     // Transition only machine 1
-    app.world_mut().write_message(TransitionMessage {
-        machine: m1,
-        source: m1_a,
-        target: m1_b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(m1, m1_a, m1_b, None));
     app.update();
 
     assert!(

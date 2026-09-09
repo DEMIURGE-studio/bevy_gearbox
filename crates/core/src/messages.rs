@@ -4,7 +4,8 @@ use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::components::*;
-use crate::resolve::{PendingCount, TransitionMessage};
+use crate::helpers::{depth_rank, region_root};
+use crate::resolve::{CandidateGroups, PendingCount, TransitionMessage};
 
 /// Trait implemented by user message types that can trigger state machine
 /// transitions.
@@ -35,6 +36,12 @@ pub trait GearboxMessage: Message + Clone + Send + Sync + bevy::reflect::TypePat
 }
 
 /// Per-edge filter that accepts or rejects a message for a specific edge.
+///
+/// A validator sees only the message. For conditions that need world access
+/// (the machine's components, resources), put a marker component on the edge
+/// and veto it from a system in
+/// [`BlockerPhase`](crate::GearboxPhase::BlockerPhase); a vetoed candidate
+/// falls through to the next edge in [`Transitions`] order.
 pub trait MessageValidator<M>: Send + Sync + 'static {
     fn matches(&self, message: &M) -> bool;
 }
@@ -54,8 +61,9 @@ impl<M> MessageValidator<M> for AcceptAll {
 ///
 /// The edge fires when:
 /// 1. The source state is active
-/// 2. The transition is not blocked by a blocker system
-/// 3. The validator (if set) accepts the message
+/// 2. The validator (if set) accepts the message
+/// 3. No blocker system vetoes it, and no better-ranked candidate (a deeper
+///    state's edge, or an earlier edge on the same state) survives
 #[derive(Component, Reflect)]
 #[reflect(Component, where M: bevy::reflect::TypePath)]
 pub struct MessageEdge<M: GearboxMessage> {
@@ -97,12 +105,14 @@ impl<M: GearboxMessage> MessageEdge<M> {
 // Matched<M>
 // ---------------------------------------------------------------------------
 
-/// Written by [`message_edge_listener`] when a message of type `M` successfully
-/// matches an edge and produces a [`TransitionMessage`]. Carries the original
-/// message along with the transition context.
+/// Written by [`message_edge_listener`] for every edge that matches a message
+/// of type `M` and is proposed as a [`TransitionMessage`] candidate. Carries
+/// the original message along with the transition context.
 ///
 /// Read in [`SideEffectPhase`](crate::GearboxPhase::SideEffectPhase) systems.
-/// Check [`BlockedEdges`](crate::resolve::BlockedEdges) to skip blocked transitions.
+/// Check [`BlockedEdges`](crate::resolve::BlockedEdges): a `Matched` whose
+/// edge is blocked was vetoed or lost to a better-ranked candidate and its
+/// transition will not be applied.
 #[derive(Message, Clone, Debug)]
 pub struct Matched<M: GearboxMessage> {
     /// The original message that triggered the transition.
@@ -121,28 +131,38 @@ pub struct Matched<M: GearboxMessage> {
 // message_edge_listener
 // ---------------------------------------------------------------------------
 
-/// System that reads incoming messages of type `M`, finds matching edges on
-/// active states (leaf-first, walk ancestors), and writes [`TransitionMessage`]s
-/// and [`Matched<M>`] messages.
+/// System that reads incoming messages of type `M` and proposes every matching
+/// edge on the active configuration as a [`TransitionMessage`] candidate, plus
+/// a [`Matched<M>`] for each.
+///
+/// Selection follows statechart rules. For each parallel region, edges are
+/// gathered from the active leaf up through its ancestors to the region root;
+/// all of them share one candidate group, ranked deeper-state-first and then
+/// by [`Transitions`] order, so after blockers run
+/// [`select_transitions`](crate::resolve::select_transitions) keeps the first
+/// surviving candidate per region. If no region has a matching edge, the
+/// states above the regions (up to the machine root) are tried as one group.
+///
+/// A delayed `MessageEdge` (one carrying [`Delay`]) reached before any
+/// undelayed candidate starts its [`EdgeTimer`] and consumes the message for
+/// that region; the transition itself is proposed when the timer elapses.
 ///
 /// Runs inside [`GearboxSchedule`](crate::GearboxSchedule) in
 /// [`GearboxPhase::EdgeDetectPhase`](crate::GearboxPhase::EdgeDetectPhase) so
-/// it participates in the per-frame resolution loop. This matters when a
-/// user message is written the same frame a [`StateMachine`](crate::StateMachine)
-/// is spawned: the first loop iteration activates the initial state and the
-/// next iteration's listener pass sees populated `active_leaves` and fires
-/// the transition, so the whole cascade resolves before the frame ends.
+/// it participates in the per-frame resolution loop: a message written the
+/// same frame a machine is spawned is seen after the machine's initial state
+/// has been activated.
 pub fn message_edge_listener<M: GearboxMessage>(
     mut reader: MessageReader<M>,
     mut writer: MessageWriter<TransitionMessage>,
     mut matched_writer: MessageWriter<Matched<M>>,
     mut pending: ResMut<PendingCount>,
+    mut groups: ResMut<CandidateGroups>,
     mut commands: Commands,
     q_machine: Query<&StateMachine>,
     q_transitions: Query<&Transitions>,
     q_edge: Query<&MessageEdge<M>>,
     q_target: Query<&Target>,
-    q_branch: Query<&BranchTransition>,
     q_source: Query<&Source>,
     q_substate_of: Query<&SubstateOf>,
     q_initial: Query<&InitialState>,
@@ -157,147 +177,100 @@ pub fn message_edge_listener<M: GearboxMessage>(
             continue;
         };
 
-        // Track which parallel region roots have already fired so each
-        // region gets at most one transition per message.
-        let mut fired_regions: HashSet<Entity> = HashSet::new();
-        let mut visited: HashSet<Entity> = HashSet::new();
-
-        // Walk from each active leaf upward through ancestors (statechart
-        // semantics: deepest state gets priority).
+        // One candidate group per parallel region, gathered from the active
+        // leaf up to the region root.
+        let mut regions: HashSet<Entity> = HashSet::new();
+        let mut any_region_matched = false;
         for &leaf in &machine.active_leaves {
-            let region_root = find_parallel_region_root(
-                leaf,
-                &q_substate_of,
-                &q_initial,
-                &q_children,
-            );
-            if fired_regions.contains(&region_root) {
+            let region = region_root(leaf, machine_entity, &q_substate_of, &q_initial, &q_children);
+            if !regions.insert(region) {
                 continue;
             }
+            let group = groups.next();
+            let mut proposed = false;
+            let mut current = Some(leaf);
+            while let Some(state) = current {
+                if !machine.active.contains(&state) {
+                    break;
+                }
+                let deferred = propose_at_state(
+                    state, machine_entity, group, &msg, &mut proposed,
+                    &q_transitions, &q_edge, &q_target, &q_source, &q_substate_of, &q_delay, &q_timer,
+                    &mut writer, &mut matched_writer, &mut pending.0, &mut commands,
+                );
+                if deferred || state == region {
+                    break;
+                }
+                current = q_substate_of.get(state).ok().map(|rel| rel.0);
+            }
+            any_region_matched |= proposed;
+        }
 
-            if try_fire_edge_on_branch(
-                leaf,
-                machine_entity,
-                &msg,
-                &q_transitions,
-                &q_edge,
-                &q_target,
-                &q_branch,
-                &q_source,
-                &q_substate_of,
-                machine,
-                &mut visited,
-                &mut writer,
-                &mut matched_writer,
-                &mut pending.0,
-                &mut commands,
-                &q_delay,
-                &q_timer,
-            ) {
-                fired_regions.insert(region_root);
+        // Nothing inside any region matched: try the states above the regions,
+        // up to and including the machine root, as a single group.
+        if !any_region_matched {
+            let group = groups.next();
+            let mut proposed = false;
+            let mut visited: HashSet<Entity> = HashSet::new();
+            'regions: for &region in &regions {
+                let mut current = if region == machine_entity {
+                    Some(machine_entity)
+                } else {
+                    q_substate_of.get(region).ok().map(|rel| rel.0)
+                };
+                while let Some(state) = current {
+                    if !visited.insert(state) {
+                        break;
+                    }
+                    let deferred = propose_at_state(
+                        state, machine_entity, group, &msg, &mut proposed,
+                        &q_transitions, &q_edge, &q_target, &q_source, &q_substate_of, &q_delay, &q_timer,
+                        &mut writer, &mut matched_writer, &mut pending.0, &mut commands,
+                    );
+                    if deferred {
+                        break 'regions;
+                    }
+                    if state == machine_entity {
+                        break;
+                    }
+                    current = q_substate_of.get(state).ok().map(|rel| rel.0);
+                }
             }
         }
-
-        // If no branch consumed the message, try root-level transitions.
-        if fired_regions.is_empty() {
-            try_fire_edge_at_state(
-                machine_entity,
-                machine_entity,
-                &msg,
-                &q_transitions,
-                &q_edge,
-                &q_target,
-                &q_branch,
-                &q_source,
-                &mut writer,
-                &mut matched_writer,
-                &mut pending.0,
-                &mut commands,
-                &q_delay,
-                &q_timer,
-            );
-        }
     }
 }
 
-/// Walk from `start` up through ancestors, trying each state's edges.
-fn try_fire_edge_on_branch<M: GearboxMessage>(
-    start: Entity,
-    machine_entity: Entity,
+/// Propose every edge on `state` whose `MessageEdge<M>` accepts `msg`.
+///
+/// Returns `true` if a delayed edge consumed the message (its timer was
+/// started, or is already running) before any undelayed candidate was
+/// proposed in this group; the caller stops walking the chain. Delayed edges
+/// encountered after an undelayed candidate are skipped.
+#[allow(clippy::too_many_arguments)]
+fn propose_at_state<M: GearboxMessage>(
+    state: Entity,
+    machine: Entity,
+    group: u64,
     msg: &M,
+    proposed: &mut bool,
     q_transitions: &Query<&Transitions>,
     q_edge: &Query<&MessageEdge<M>>,
     q_target: &Query<&Target>,
-    q_branch: &Query<&BranchTransition>,
     q_source: &Query<&Source>,
     q_substate_of: &Query<&SubstateOf>,
-    machine: &StateMachine,
-    visited: &mut HashSet<Entity>,
+    q_delay: &Query<&Delay>,
+    q_timer: &Query<(), With<EdgeTimer>>,
     writer: &mut MessageWriter<TransitionMessage>,
     matched_writer: &mut MessageWriter<Matched<M>>,
     pending: &mut usize,
     commands: &mut Commands,
-    q_delay: &Query<&Delay>,
-    q_timer: &Query<(), With<EdgeTimer>>,
 ) -> bool {
-    let mut current = Some(start);
-    while let Some(state) = current {
-        if !visited.insert(state) {
-            current = q_substate_of.get(state).ok().map(|rel| rel.0);
-            continue;
-        }
-        if state == machine_entity {
-            break;
-        }
-        if !machine.active.contains(&state) {
-            break;
-        }
-        if try_fire_edge_at_state(
-            state,
-            machine_entity,
-            msg,
-            q_transitions,
-            q_edge,
-            q_target,
-            q_branch,
-            q_source,
-            writer,
-            matched_writer,
-            pending,
-            commands,
-            q_delay,
-            q_timer,
-        ) {
-            return true;
-        }
-        current = q_substate_of.get(state).ok().map(|rel| rel.0);
-    }
-    false
-}
-
-/// Check edges at a single state for a matching `MessageEdge<M>`.
-fn try_fire_edge_at_state<M: GearboxMessage>(
-    state: Entity,
-    machine_entity: Entity,
-    msg: &M,
-    q_transitions: &Query<&Transitions>,
-    q_edge: &Query<&MessageEdge<M>>,
-    q_target: &Query<&Target>,
-    q_branch: &Query<&BranchTransition>,
-    q_source: &Query<&Source>,
-    writer: &mut MessageWriter<TransitionMessage>,
-    matched_writer: &mut MessageWriter<Matched<M>>,
-    pending: &mut usize,
-    commands: &mut Commands,
-    q_delay: &Query<&Delay>,
-    q_timer: &Query<(), With<EdgeTimer>>,
-) -> bool {
-    use crate::resolve::resolve_edge_target;
-
     let Ok(transitions) = q_transitions.get(state) else {
         return false;
     };
-    for &edge in transitions {
+    let depth = depth_rank(state, q_substate_of);
+
+    for (index, &edge) in transitions.into_iter().enumerate() {
         let Ok(me) = q_edge.get(edge) else {
             continue;
         };
@@ -307,42 +280,42 @@ fn try_fire_edge_at_state<M: GearboxMessage>(
             }
         }
 
-        // Delayed message edge: the message starts a timer. The
-        // transition fires when the timer expires (via tick_delay_timers).
         if let Ok(delay) = q_delay.get(edge) {
-            if q_timer.get(edge).is_err() {
-                // No timer yet — start one. The message is consumed
-                // (returns true) but the transition is deferred.
-                commands.entity(edge).insert(
-                    EdgeTimer(Timer::new(delay.duration, TimerMode::Once)),
-                );
+            if *proposed {
+                continue;
             }
-            // Timer already running — message is consumed but ignored.
+            if !q_timer.contains(edge) {
+                commands
+                    .entity(edge)
+                    .insert(EdgeTimer(Timer::new(delay.duration, TimerMode::Once)));
+            }
+            *proposed = true;
             return true;
         }
 
-        let Some(target) = resolve_edge_target(edge, q_branch, q_target) else {
+        let Ok(target) = q_target.get(edge) else {
             continue;
         };
-
-        let source_state = q_source.get(edge).map(|s| s.0).unwrap_or(state);
+        let source = q_source.get(edge).map(|s| s.0).unwrap_or(state);
 
         writer.write(TransitionMessage {
-            machine: machine_entity,
-            source: source_state,
-            target,
+            machine,
+            source,
+            target: target.0,
             edge: Some(edge),
             blocked: false,
+            group,
+            rank: (depth, index as u32),
         });
         matched_writer.write(Matched {
             message: msg.clone(),
-            machine: machine_entity,
-            source: source_state,
-            target,
+            machine,
+            source,
+            target: target.0,
             edge,
         });
         *pending += 1;
-        return true;
+        *proposed = true;
     }
     false
 }
@@ -372,7 +345,9 @@ impl GearboxMessage for Done {
 }
 
 /// System that emits [`Done`] messages when a [`TerminalState`] gains [`Active`].
-/// Runs in [`GearboxPhase::EntryPhase`].
+/// Runs in [`GearboxPhase::EdgeDetectPhase`](crate::GearboxPhase::EdgeDetectPhase),
+/// ahead of the edge listeners, so the parent's `MessageEdge<Done>` is
+/// considered in the same iteration.
 pub fn emit_terminal_done(
     q_new: Query<(Entity, &SubstateOf), (Added<Active>, With<TerminalState>)>,
     mut writer: MessageWriter<Done>,
@@ -380,29 +355,4 @@ pub fn emit_terminal_done(
     for (_entity, parent) in &q_new {
         writer.write(Done::new(parent.0));
     }
-}
-
-/// Find the parallel region root for a state. If the state is under a
-/// parallel parent (has children, no InitialState), returns the immediate
-/// child of that parallel parent that contains `state`.
-fn find_parallel_region_root(
-    state: Entity,
-    q_substate_of: &Query<&SubstateOf>,
-    q_initial: &Query<&InitialState>,
-    q_children: &Query<&Substates>,
-) -> Entity {
-    let mut previous = state;
-    for ancestor in q_substate_of.iter_ancestors(state) {
-        let has_children = q_children
-            .get(ancestor)
-            .ok()
-            .map(|c| c.into_iter().next().is_some())
-            .unwrap_or(false);
-        let is_parallel = !q_initial.contains(ancestor) && has_children;
-        if is_parallel {
-            return previous;
-        }
-        previous = ancestor;
-    }
-    state
 }

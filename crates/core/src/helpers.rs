@@ -10,6 +10,41 @@ pub(crate) fn path_to_root(start: Entity, q_substate_of: &Query<&SubstateOf>) ->
     path
 }
 
+/// Depth-based priority for a candidate transition: deeper states rank first,
+/// so a leaf's edge beats its ancestor's for the same trigger.
+pub(crate) fn depth_rank(state: Entity, q_substate_of: &Query<&SubstateOf>) -> u32 {
+    u32::MAX - q_substate_of.iter_ancestors(state).count() as u32
+}
+
+/// The root of the parallel region containing `state`: the child of the
+/// nearest parallel ancestor (a parent with children but no `InitialState`).
+/// Returns `machine` when no ancestor is parallel, so a sequential machine is
+/// a single region.
+pub(crate) fn region_root(
+    state: Entity,
+    machine: Entity,
+    q_substate_of: &Query<&SubstateOf>,
+    q_initial: &Query<&InitialState>,
+    q_children: &Query<&Substates>,
+) -> Entity {
+    let mut previous = state;
+    for ancestor in q_substate_of.iter_ancestors(state) {
+        let has_children = q_children
+            .get(ancestor)
+            .ok()
+            .map(|c| c.into_iter().next().is_some())
+            .unwrap_or(false);
+        if has_children && !q_initial.contains(ancestor) {
+            return previous;
+        }
+        previous = ancestor;
+        if ancestor == machine {
+            break;
+        }
+    }
+    machine
+}
+
 pub(crate) fn get_all_leaf_states(
     start: Entity,
     q_initial: &Query<&InitialState>,

@@ -54,8 +54,11 @@ fn spawn_character(mut commands: Commands) {
 }
 ```
 
-To attach a machine to an entity you already spawned, use `apply_scene`
-instead of `spawn_scene` - the scene's root patches onto the existing entity:
+To attach a machine to an entity you already spawned (one that has no machine
+yet), use `apply_scene` instead of `spawn_scene` - the scene's root patches onto
+the existing entity. A scene's `Substates [ .. ]` / `Transitions [ .. ]` block
+replaces any list already on the entity, so add edges to a live machine with
+`insert_related`, not a second scene:
 
 ```rust
 commands.entity(player).apply_scene(bsn! {
@@ -289,17 +292,60 @@ Sending `Attacked { target: character, amount }` is safe when the character is
 no damage is applied. Edges are **external** by default; mark them
 `EdgeKind::Internal` only when you want to stay within the source state.
 
-### Blocking a transition
+### Guards: ordered candidates, first passing guard wins
 
-To veto a transition before it applies, run a system in
-`GearboxPhase::BlockerPhase` that mutates the pending `TransitionMessage` and
-sets `blocked = true`. `collect_blocked_edges` then records the edge so
-side-effect systems skip it (as shown above).
+Gearbox follows XState here: there is no "branch" node. A conditional transition
+is several edges for the same trigger, listed in priority order, each carrying
+whatever guard it needs. Every matching edge along the active leaf's ancestor
+chain is proposed as a candidate (deeper state first, then `Transitions`
+order); guards veto candidates; the first survivor is applied. A guardless
+edge last in the list is the fallback.
+
+A guard is a marker component on the edge plus a system in
+`GearboxPhase::BlockerPhase` that sets `blocked = true` on the candidates it
+rejects. The order of the `Transitions [ .. ]` list is the priority order:
+
+```rust
+#[derive(Component, Default, Clone)]
+struct HpIsZero;
+
+#Alive Transitions [
+    (Target(#Dead)  MessageEdge::<Attacked> HpIsZero),  // taken only if the guard passes
+    (Target(#Hurt)  MessageEdge::<Attacked>),           // otherwise
+]
+
+fn hp_is_zero_guard(
+    mut candidates: MessageMutator<TransitionMessage>,
+    q_guard: Query<(), With<HpIsZero>>,
+    q_hp: Query<&Hitpoints>,
+) {
+    for c in candidates.read() {
+        let Some(edge) = c.edge else { continue };
+        if q_guard.contains(edge) && q_hp.get(c.machine).is_ok_and(|hp| hp.current > 0.0) {
+            c.blocked = true;
+        }
+    }
+}
+
+app.add_systems(GearboxSchedule, hp_is_zero_guard.in_set(GearboxPhase::BlockerPhase));
+```
+
+The same rule applies to `AlwaysEdge` lists and to delayed edges: two
+always-edges on one state form an XState `always: [ .. ]` list, and two edges
+with the same `Delay` form an `after: { ms: [ .. ] }` list. If every candidate
+on the leaf is vetoed, the parent's edges are tried, as in SCXML. Side-effect
+systems see a `Matched<M>` for every candidate and skip the ones in
+`BlockedEdges`, so only the winner's payload is applied.
+[`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) is a
+playable version: light and heavy hits pick between `Hurt`, `Staggered` and
+`Dead` through two guards and a fallback.
 
 ---
 
 For runnable, end-to-end examples see
 [`examples/invoked_loop.rs`](examples/invoked_loop.rs) (a playable fire-and-cooldown
-ability) and [`examples/parallel_regions.rs`](examples/parallel_regions.rs)
-(parallel regions driven by keyboard input). Both are real windowed apps that
+ability), [`examples/parallel_regions.rs`](examples/parallel_regions.rs)
+(parallel regions driven by keyboard input) and
+[`examples/guarded_transitions.rs`](examples/guarded_transitions.rs) (guarded
+candidates with a `Matched<M>` side effect). All are real windowed apps that
 also serve the editor protocol — run one and connect the gearbox editor to it.

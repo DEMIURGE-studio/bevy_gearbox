@@ -71,7 +71,15 @@ impl FromWorld for Source {
     }
 }
 
-/// Outbound edges from a state.
+/// Outbound edges from a state, in priority order.
+///
+/// The order is part of the chart. When several edges on the same state match
+/// the same trigger, they are proposed as competing candidates and the first
+/// one that no blocker vetoes wins, so a guardless edge placed last acts as the
+/// fallback. A `bsn!` `Transitions [ .. ]` list is applied in authored order;
+/// runtime insertions can pick a position with
+/// `EntityCommands::insert_related::<Source>(index, ..)`. Anything that
+/// serializes a chart must write edges in this order.
 #[derive(Component, Default, Debug, PartialEq, Eq)]
 #[relationship_target(relationship = Source, linked_spawn)]
 pub struct Transitions(Vec<Entity>);
@@ -121,38 +129,22 @@ impl Delay {
     }
 }
 
-/// Active timer for a delayed edge. Created when the source state is entered,
-/// removed when exited. Ticked in [`Update`] after [`GearboxSet`].
+/// Active timer for a delayed edge. Created when the source state is entered
+/// (or, for a delayed [`MessageEdge`](crate::messages::MessageEdge), when its
+/// message first matches) and removed when the source is exited. Ticked once
+/// per frame before the schedule loop; elapsed timers are proposed as
+/// transition candidates in the first iteration's edge detection.
 #[derive(Component)]
 pub struct EdgeTimer(pub Timer);
 
 /// Marks a state as terminal (XState "final state"). When entered, a [`Done`]
 /// message is emitted targeting the parent state (via [`SubstateOf`]). The
 /// parent can then transition out via a `MessageEdge<Done>`.
+///
+/// [`Done`]: crate::messages::Done
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct TerminalState;
-
-/// A single arm of a [`BranchTransition`]. Each arm has a target state
-/// and an associated entity for condition data.
-#[derive(Clone, Debug)]
-pub struct BranchArm {
-    /// The destination state if this arm is taken.
-    pub target: Entity,
-    /// An entity associated with this arm (for condition components, etc.).
-    pub guard: Entity,
-}
-
-/// Replaces the single [`Target`] on an edge with conditional branching.
-/// Arms are evaluated in order; the first with passing guards wins.
-/// If no arm passes, the `otherwise` target is used.
-///
-/// Works with both [`AlwaysEdge`] and [`MessageEdge`].
-#[derive(Component, Debug)]
-pub struct BranchTransition {
-    pub arms: Vec<BranchArm>,
-    pub otherwise: Entity,
-}
 
 /// Marker to request reset of subtree(s) when an edge fires.
 #[derive(Component, Default)]

@@ -75,33 +75,15 @@ fn shallow_history_restores_immediate_child() {
     );
 
     // A → B
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: a,
-        target: b,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, a, b, None));
     app.update();
 
     // P → D (saves shallow history: B)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: p,
-        target: d,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, p, d, None));
     app.update();
 
     // D → P (shallow history restores B)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: d,
-        target: p,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, d, p, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -155,13 +137,7 @@ fn shallow_history_drills_down_from_restored_child() {
     app.update();
 
     // Q → R (now in P/R/Z)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: q,
-        target: r,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, q, r, None));
     app.update();
     assert!(
         app.world()
@@ -172,23 +148,11 @@ fn shallow_history_drills_down_from_restored_child() {
     );
 
     // P → D (saves shallow history: R was the active child of P)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: p,
-        target: d,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, p, d, None));
     app.update();
 
     // D → P (restore R, drill to Z)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: d,
-        target: p,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, d, p, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -235,33 +199,15 @@ fn deep_history_restores_exact_leaves() {
     app.update();
 
     // X → Y
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: x,
-        target: y,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, x, y, None));
     app.update();
 
     // P → D
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: p,
-        target: d,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, p, d, None));
     app.update();
 
     // D → P (deep history restores Y)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: d,
-        target: p,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, d, p, None));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();
@@ -302,33 +248,15 @@ fn reset_edge_clears_history_before_entry() {
     app.update();
 
     // X → Y
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: x,
-        target: y,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, x, y, None));
     app.update();
 
     // P → D (saves deep history: Y)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: p,
-        target: d,
-        edge: None,
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, p, d, None));
     app.update();
 
     // D → P via reset edge (clears history → falls back to InitialState X)
-    app.world_mut().write_message(TransitionMessage {
-        machine,
-        source: d,
-        target: p,
-        edge: Some(reset_edge),
-        blocked: false,
-    });
+    app.world_mut().write_message(TransitionMessage::new(machine, d, p, Some(reset_edge)));
     app.update();
 
     let state = app.world().get::<StateMachine>(machine).unwrap();

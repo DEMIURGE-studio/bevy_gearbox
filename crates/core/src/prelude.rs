@@ -4,7 +4,6 @@ pub use crate::components::{
     Source, Target, Transitions, AlwaysEdge, EdgeKind,
     Delay,
     ResetEdge, ResetScope,
-    BranchTransition, BranchArm,
 };
 pub use crate::state_component::{
     StateComponent, StateInactiveComponent,
@@ -19,13 +18,13 @@ pub use crate::messages::{
 };
 #[allow(deprecated)]
 pub use crate::commands::{
-    SpawnSubstate, SpawnTransition, BuildTransition, SpawnBranch, BranchBuilder,
+    SpawnSubstate, SpawnTransition, BuildTransition,
     TransitionExt, InitStateMachine,
     GearboxCommandsExt, BuildEntityEvent,
 };
 pub use crate::{GearboxSchedule, GearboxPhase, GearboxSet};
 pub use crate::resolve::{
-    TransitionMessage, BlockedEdges,
+    TransitionMessage, BlockedEdges, CandidateGroups,
     EnterState, ExitState,
 };
 pub use crate::registration::RegistrationAppExt;

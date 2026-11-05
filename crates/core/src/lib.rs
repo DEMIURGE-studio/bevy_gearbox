@@ -230,7 +230,7 @@ fn activate_added_substates(
         // Insert Active on states that don't yet carry it.
         for &state in &machine.active {
             if q_active.get(state).is_err() {
-                commands.entity(state).insert(Active {
+                commands.entity(state).try_insert(Active {
                     machine: machine_entity,
                 });
             }

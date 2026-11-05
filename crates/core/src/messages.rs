@@ -313,7 +313,7 @@ fn try_fire_edge_at_state<M: GearboxMessage>(
             if q_timer.get(edge).is_err() {
                 // No timer yet — start one. The message is consumed
                 // (returns true) but the transition is deferred.
-                commands.entity(edge).insert(
+                commands.entity(edge).try_insert(
                     EdgeTimer(Timer::new(delay.duration, TimerMode::Once)),
                 );
             }

@@ -19,7 +19,7 @@ pub fn state_component_enter<T: Component<Mutability = Mutable> + Clone>(
     mut commands: Commands,
 ) {
     for (active, sc) in &q_entered {
-        commands.entity(active.machine).insert(sc.0.clone());
+        commands.entity(active.machine).try_insert(sc.0.clone());
     }
 }
 
@@ -61,6 +61,6 @@ pub fn state_inactive_component_exit<T: Component + Clone>(
             continue;
         };
         let machine = q_substate_of.root_ancestor(entity);
-        commands.entity(machine).insert(ic.0.clone());
+        commands.entity(machine).try_insert(ic.0.clone());
     }
 }

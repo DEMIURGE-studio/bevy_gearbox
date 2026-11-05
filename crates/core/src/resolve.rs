@@ -168,7 +168,7 @@ pub(crate) fn resolve_transitions(
 
             // Insert Active on all newly active states
             for &state in &machine.active {
-                commands.entity(state).insert(Active { machine: msg.machine });
+                commands.entity(state).try_insert(Active { machine: msg.machine });
             }
             pending.0 += 1;
             continue;
@@ -335,20 +335,20 @@ pub(crate) fn resolve_transitions(
 
         // Remove Active from exited states
         for &state in &exited_all {
-            commands.entity(state).remove::<Active>();
+            commands.entity(state).try_remove::<Active>();
         }
 
         for &state in &machine.active {
             if !old_active.contains(&state) || exited_all.contains(&state) {
                 // New or re-entered (exited then re-added): triggers Added<Active>.
-                commands.entity(state).insert(Active { machine: msg.machine });
+                commands.entity(state).try_insert(Active { machine: msg.machine });
             } else if state == msg.target
                 || (!is_internal
                     && q_substate_of
                         .iter_ancestors(state)
                         .any(|a| a == msg.target))
             {
-                commands.entity(state).insert(Active { machine: msg.machine });
+                commands.entity(state).try_insert(Active { machine: msg.machine });
             }
         }
 

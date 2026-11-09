@@ -109,19 +109,24 @@ fn setup(mut commands: Commands) {
             StateMachine InitialState(#Locked)
         Substates [
             #Locked Transitions [
-                (Target(#One) MessageEdge::<Press>::new(Some(Digit::Only(1)))),
-            ],
+                Target(#One) MessageEdge::<Press>::new(Some(Digit::Only(1)))
+            ]
+            --
             #One Transitions [
-                (Target(#Two)    MessageEdge::<Press>::new(Some(Digit::Only(2)))),
-                (Target(#Locked) MessageEdge::<Press>),
-            ],
+                Target(#Two)    MessageEdge::<Press>::new(Some(Digit::Only(2)))
+                --
+                Target(#Locked) MessageEdge::<Press>
+            ]
+            --
             #Two Transitions [
-                (Target(#Open)   MessageEdge::<Press>::new(Some(Digit::Only(3)))),
-                (Target(#Locked) MessageEdge::<Press>),
-            ],
+                Target(#Open)   MessageEdge::<Press>::new(Some(Digit::Only(3)))
+                --
+                Target(#Locked) MessageEdge::<Press>
+            ]
+            --
             #Open Transitions [
-                (Target(#Locked) MessageEdge::<Press>),
-            ],
+                Target(#Locked) MessageEdge::<Press>
+            ]
         ]
     });
 }

@@ -58,11 +58,12 @@ fn spawn_machine(mut commands: Commands) {
         StateMachine InitialState(#Ready)
         Substates [
             #Ready Transitions [
-                (Target(#Active) MessageEdge::<Activate>)
-            ],
+                Target(#Active) MessageEdge::<Activate>
+            ]
+            --
             #Active Transitions [
-                (Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.5))
-            ],
+                Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.5)
+            ]
         ]
     });
 }

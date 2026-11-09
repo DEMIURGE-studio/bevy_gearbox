@@ -73,9 +73,11 @@ fn setup(mut commands: Commands) {
             StateMachineId("flow")
             StateMachine InitialState(#Menu)
         Substates [
-            #Menu    Screen::Menu    Transitions [ (Target(#Loading) MessageEdge::<Start>) ],
-            #Loading Screen::Loading Transitions [ (Target(#Playing) AlwaysEdge Delay::from_secs_f32(1.0)) ],
-            #Playing Screen::Playing Transitions [ (Target(#Menu) MessageEdge::<Quit>) ],
+            #Menu    Screen::Menu    Transitions [ Target(#Loading) MessageEdge::<Start> ]
+            --
+            #Loading Screen::Loading Transitions [ Target(#Playing) AlwaysEdge Delay::from_secs_f32(1.0) ]
+            --
+            #Playing Screen::Playing Transitions [ Target(#Menu) MessageEdge::<Quit> ]
         ]
     });
 }

@@ -104,11 +104,14 @@ fn first_passing_candidate_wins_in_transitions_order() {
         StateMachine InitialState(#Idle)
         Substates [
             #Idle Transitions [
-                (#ToA Target(#A) MessageEdge::<Hit> Never),
-                (#ToB Target(#B) MessageEdge::<Hit>),
-                (#ToC Target(#C) MessageEdge::<Hit>),
-            ],
-            #A, #B, #C,
+                #ToA Target(#A) MessageEdge::<Hit> Never
+                --
+                #ToB Target(#B) MessageEdge::<Hit>
+                --
+                #ToC Target(#C) MessageEdge::<Hit>
+            ]
+            --
+            #A -- #B -- #C
         ]
     });
     app.update();
@@ -128,10 +131,12 @@ fn all_candidates_vetoed_leaves_state_unchanged() {
         StateMachine InitialState(#Idle)
         Substates [
             #Idle Transitions [
-                (Target(#A) MessageEdge::<Hit> Never),
-                (Target(#B) MessageEdge::<Hit> Never),
-            ],
-            #A, #B,
+                Target(#A) MessageEdge::<Hit> Never
+                --
+                Target(#B) MessageEdge::<Hit> Never
+            ]
+            --
+            #A -- #B
         ]
     });
     app.update();
@@ -147,10 +152,12 @@ fn guardless_last_edge_is_the_otherwise() {
         StateMachine InitialState(#Idle)
         Substates [
             #Idle Transitions [
-                (Target(#Special) MessageEdge::<Hit> OnlyIfAllowed),
-                (Target(#Normal) MessageEdge::<Hit>),
-            ],
-            #Special, #Normal Transitions [ (Target(#Idle) MessageEdge::<Hit>) ],
+                Target(#Special) MessageEdge::<Hit> OnlyIfAllowed
+                --
+                Target(#Normal) MessageEdge::<Hit>
+            ]
+            --
+            #Special -- #Normal Transitions [ Target(#Idle) MessageEdge::<Hit> ]
         ]
     });
     app.update();
@@ -175,12 +182,14 @@ fn vetoed_leaf_falls_through_to_parent_edge() {
         StateMachine InitialState(#Parent)
         Substates [
             #Parent InitialState(#Child)
-                Transitions [ (Target(#FromParent) MessageEdge::<Hit>) ]
+                Transitions [ Target(#FromParent) MessageEdge::<Hit> ]
                 Substates [
-                    #Child Transitions [ (Target(#FromChild) MessageEdge::<Hit> OnlyIfAllowed) ],
-                ],
-            #FromParent Transitions [ (Target(#Parent) MessageEdge::<Hit>) ],
-            #FromChild,
+                    #Child Transitions [ Target(#FromChild) MessageEdge::<Hit> OnlyIfAllowed ]
+                ]
+            --
+            #FromParent Transitions [ Target(#Parent) MessageEdge::<Hit> ]
+            --
+            #FromChild
         ]
     });
     app.update();
@@ -205,11 +214,14 @@ fn only_the_winner_is_unblocked_for_side_effects() {
         StateMachine InitialState(#Idle)
         Substates [
             #Idle Transitions [
-                (#Vetoed Target(#A) MessageEdge::<Hit> Never),
-                (#Winner Target(#B) MessageEdge::<Hit>),
-                (#Loser  Target(#C) MessageEdge::<Hit>),
-            ],
-            #A, #B, #C,
+                #Vetoed Target(#A) MessageEdge::<Hit> Never
+                --
+                #Winner Target(#B) MessageEdge::<Hit>
+                --
+                #Loser  Target(#C) MessageEdge::<Hit>
+            ]
+            --
+            #A -- #B -- #C
         ]
     });
     app.update();
@@ -229,10 +241,12 @@ fn guarded_always_edges_fall_through() {
         StateMachine InitialState(#Start)
         Substates [
             #Start Transitions [
-                (Target(#A) AlwaysEdge Never),
-                (Target(#B) AlwaysEdge),
-            ],
-            #A, #B,
+                Target(#A) AlwaysEdge Never
+                --
+                Target(#B) AlwaysEdge
+            ]
+            --
+            #A -- #B
         ]
     });
     app.update();
@@ -250,10 +264,12 @@ fn guarded_delayed_always_edges_fall_through() {
         StateMachine InitialState(#Start)
         Substates [
             #Start Transitions [
-                (Target(#A) AlwaysEdge Delay::from_secs_f32(0.1) Never),
-                (Target(#B) AlwaysEdge Delay::from_secs_f32(0.1)),
-            ],
-            #A, #B,
+                Target(#A) AlwaysEdge Delay::from_secs_f32(0.1) Never
+                --
+                Target(#B) AlwaysEdge Delay::from_secs_f32(0.1)
+            ]
+            --
+            #A -- #B
         ]
     });
     app.update(); // spawn + init; timers start
@@ -273,8 +289,9 @@ fn delayed_transition_can_be_vetoed() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Start)
         Substates [
-            #Start Transitions [ (Target(#A) AlwaysEdge Delay::from_secs_f32(0.1) Never) ],
-            #A,
+            #Start Transitions [ Target(#A) AlwaysEdge Delay::from_secs_f32(0.1) Never ]
+            --
+            #A
         ]
     });
     for _ in 0..6 {
@@ -292,15 +309,19 @@ fn each_parallel_region_selects_independently() {
         Substates [
             #Left InitialState(#L1) Substates [
                 #L1 Transitions [
-                    (Target(#L2) MessageEdge::<Hit> Never),
-                    (Target(#L3) MessageEdge::<Hit>),
-                ],
-                #L2, #L3,
-            ],
+                    Target(#L2) MessageEdge::<Hit> Never
+                    --
+                    Target(#L3) MessageEdge::<Hit>
+                ]
+                --
+                #L2 -- #L3
+            ]
+            --
             #Right InitialState(#R1) Substates [
-                #R1 Transitions [ (Target(#R2) MessageEdge::<Hit>) ],
-                #R2,
-            ],
+                #R1 Transitions [ Target(#R2) MessageEdge::<Hit> ]
+                --
+                #R2
+            ]
         ]
     });
     app.update();

@@ -109,32 +109,39 @@ fn setup(mut commands: Commands) {
             StateMachine InitialState(#Playing)
         Substates [
             #Playing InitialState(#Level1) History::Deep
-                Transitions [ (Target(#Paused) MessageEdge::<Pause>) ]
+                Transitions [ Target(#Paused) MessageEdge::<Pause> ]
                 Substates [
                     #Level1 InitialState(#Start1)
-                        Transitions [ (Target(#Level2) MessageEdge::<Next>) ]
+                        Transitions [ Target(#Level2) MessageEdge::<Next> ]
                         Substates [
-                            #Start1 Transitions [ (Target(#Boss1) MessageEdge::<ToBoss>) ],
-                            #Boss1,
-                        ],
+                            #Start1 Transitions [ Target(#Boss1) MessageEdge::<ToBoss> ]
+                            --
+                            #Boss1
+                        ]
+                    --
                     #Level2 InitialState(#Start2)
-                        Transitions [ (Target(#Level3) MessageEdge::<Next>) ]
+                        Transitions [ Target(#Level3) MessageEdge::<Next> ]
                         Substates [
-                            #Start2 Transitions [ (Target(#Boss2) MessageEdge::<ToBoss>) ],
-                            #Boss2,
-                        ],
+                            #Start2 Transitions [ Target(#Boss2) MessageEdge::<ToBoss> ]
+                            --
+                            #Boss2
+                        ]
+                    --
                     #Level3 InitialState(#Start3)
                         Substates [
-                            #Start3 Transitions [ (Target(#Boss3) MessageEdge::<ToBoss>) ],
-                            #Boss3,
-                        ],
-                ],
+                            #Start3 Transitions [ Target(#Boss3) MessageEdge::<ToBoss> ]
+                            --
+                            #Boss3
+                        ]
+                ]
+            --
             #Paused Transitions [
                 // Re-entering Playing restores its history.
-                (Target(#Playing) MessageEdge::<Resume>),
+                Target(#Playing) MessageEdge::<Resume>
+                --
                 // ResetEdge clears the history under the target first.
-                (Target(#Playing) MessageEdge::<Restart> ResetEdge(ResetScope::Target)),
-            ],
+                Target(#Playing) MessageEdge::<Restart> ResetEdge(ResetScope::Target)
+            ]
         ]
     });
 }

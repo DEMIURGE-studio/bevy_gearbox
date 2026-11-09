@@ -50,9 +50,11 @@ fn transient_state_gets_enter_and_exit_in_one_frame() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Idle)
         Substates [
-            #Idle on(record_enter) on(record_exit) Transitions [ (Target(#Mid) MessageEdge::<Go>) ],
-            #Mid on(record_enter) on(record_exit) Transitions [ (Target(#End) AlwaysEdge) ],
-            #End on(record_enter) on(record_exit),
+            #Idle on(record_enter) on(record_exit) Transitions [ Target(#Mid) MessageEdge::<Go> ]
+            --
+            #Mid on(record_enter) on(record_exit) Transitions [ Target(#End) AlwaysEdge ]
+            --
+            #End on(record_enter) on(record_exit)
         ]
     });
     app.update();
@@ -73,13 +75,14 @@ fn events_follow_statechart_order() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Idle)
         Substates [
-            #Idle on(record_enter) on(record_exit) Transitions [ (Target(#Outer) MessageEdge::<Go>) ],
+            #Idle on(record_enter) on(record_exit) Transitions [ Target(#Outer) MessageEdge::<Go> ]
+            --
             #Outer on(record_enter) on(record_exit)
                 InitialState(#Inner)
-                Transitions [ (Target(#Idle) MessageEdge::<Go>) ]
+                Transitions [ Target(#Idle) MessageEdge::<Go> ]
                 Substates [
-                    #Inner on(record_enter) on(record_exit),
-                ],
+                    #Inner on(record_enter) on(record_exit)
+                ]
         ]
     });
     app.update();
@@ -110,11 +113,12 @@ fn exit_observers_run_before_entry_observers() {
         Substates [
             #Idle
                 on(|exit: On<ExitState>, mut commands: Commands| { commands.entity(exit.machine).insert(LeftIdle); })
-                Transitions [ (Target(#Run) MessageEdge::<Go>) ],
+                Transitions [ Target(#Run) MessageEdge::<Go> ]
+            --
             #Run
                 on(|enter: On<EnterState>, q: Query<(), With<LeftIdle>>, mut saw: ResMut<SawMarker>| {
                     saw.0 = q.contains(enter.machine);
-                }),
+                })
         ]
     });
     app.update();

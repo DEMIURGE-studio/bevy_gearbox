@@ -75,8 +75,9 @@ fn setup(mut commands: Commands) {
             StateMachineId("light")
             StateMachine InitialState(#Off)
         Substates [
-            #Off Transitions [ (Target(#On) MessageEdge::<Toggle>) ],
-            #On  Transitions [ (Target(#Off) MessageEdge::<Toggle>) ],
+            #Off Transitions [ Target(#On) MessageEdge::<Toggle> ]
+            --
+            #On  Transitions [ Target(#Off) MessageEdge::<Toggle> ]
         ]
     });
 }

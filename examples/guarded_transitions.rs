@@ -125,19 +125,24 @@ fn setup(mut commands: Commands) {
             // Three candidates for the same message, in priority order.
             // The guardless edge is last: it is the fallback.
             #Alive on(entered("Alive")) Transitions [
-                (Target(#Dead)      MessageEdge::<Hit> Lethal),
-                (Target(#Staggered) MessageEdge::<Hit> Heavy),
-                (Target(#Hurt)      MessageEdge::<Hit>),
-            ],
+                Target(#Dead)      MessageEdge::<Hit> Lethal
+                --
+                Target(#Staggered) MessageEdge::<Hit> Heavy
+                --
+                Target(#Hurt)      MessageEdge::<Hit>
+            ]
+            --
             #Hurt on(entered("Hurt")) Transitions [
-                (Target(#Alive) AlwaysEdge Delay::from_secs_f32(0.4))
-            ],
+                Target(#Alive) AlwaysEdge Delay::from_secs_f32(0.4)
+            ]
+            --
             #Staggered on(entered("Staggered")) Transitions [
-                (Target(#Alive) AlwaysEdge Delay::from_secs_f32(1.0))
-            ],
+                Target(#Alive) AlwaysEdge Delay::from_secs_f32(1.0)
+            ]
+            --
             #Dead on(entered("Dead")) Transitions [
-                (Target(#Alive) MessageEdge::<Revive>)
-            ],
+                Target(#Alive) MessageEdge::<Revive>
+            ]
         ]
     });
 }

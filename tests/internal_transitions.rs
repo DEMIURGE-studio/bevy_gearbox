@@ -47,15 +47,19 @@ fn make_app() -> App {
             #Playing InitialState(#Level1)
                 on(count_entry)
                 Transitions [
-                    (Target(#Playing) MessageEdge::<Coin> EdgeKind::Internal),
-                    (Target(#Level3)  MessageEdge::<Skip> EdgeKind::Internal),
-                    (Target(#Playing) MessageEdge::<Restart>),
+                    Target(#Playing) MessageEdge::<Coin> EdgeKind::Internal
+                    --
+                    Target(#Level3)  MessageEdge::<Skip> EdgeKind::Internal
+                    --
+                    Target(#Playing) MessageEdge::<Restart>
                 ]
                 Substates [
-                    #Level1 Transitions [ (Target(#Level2) MessageEdge::<Next>) ],
-                    #Level2 Transitions [ (Target(#Level3) MessageEdge::<Next>) ],
-                    #Level3,
-                ],
+                    #Level1 Transitions [ Target(#Level2) MessageEdge::<Next> ]
+                    --
+                    #Level2 Transitions [ Target(#Level3) MessageEdge::<Next> ]
+                    --
+                    #Level3
+                ]
         ]
     });
     app.update();

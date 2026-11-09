@@ -111,15 +111,18 @@ fn setup(mut commands: Commands) {
                 on(new_run)
                 Transitions [
                     // Internal: no exit, no entry, the active level is kept.
-                    (Target(#Playing) MessageEdge::<Coin> EdgeKind::Internal),
+                    Target(#Playing) MessageEdge::<Coin> EdgeKind::Internal
+                    --
                     // External (the default): Playing is exited and re-entered.
-                    (Target(#Playing) MessageEdge::<Restart>),
+                    Target(#Playing) MessageEdge::<Restart>
                 ]
                 Substates [
-                    #Level1 Transitions [ (Target(#Level2) MessageEdge::<Next>) ],
-                    #Level2 Transitions [ (Target(#Level3) MessageEdge::<Next>) ],
-                    #Level3,
-                ],
+                    #Level1 Transitions [ Target(#Level2) MessageEdge::<Next> ]
+                    --
+                    #Level2 Transitions [ Target(#Level3) MessageEdge::<Next> ]
+                    --
+                    #Level3
+                ]
         ]
     });
 }

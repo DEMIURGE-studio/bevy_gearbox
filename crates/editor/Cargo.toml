@@ -19,7 +19,7 @@ bevy = { workspace = true, features = [
     "bevy_window",
     "bevy_winit",
 ] }
-bevy_egui = "0.40.0"
+bevy_egui = "0.43.1"
 bevy_gearbox_protocol = { workspace = true, features = ["client"] }
 hex = "0.4.3"
 ron = "0.11.0"

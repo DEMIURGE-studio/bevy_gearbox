@@ -90,13 +90,15 @@ fn setup(mut commands: Commands) {
             StateMachineId("turret")
             StateMachine InitialState(#Idle)
         Substates [
-            #Idle Transitions [ (Target(#Aiming) MessageEdge::<Spot>) ],
+            #Idle Transitions [ Target(#Aiming) MessageEdge::<Spot> ]
+            --
             #Aiming
                 on(|_exit: On<ExitState>, mut barrel: Single<&mut Sprite, With<Barrel>>| {
                     barrel.color = BARREL_IDLE;
                 })
-                Transitions [ (Target(#Firing) AlwaysEdge Delay::from_secs_f32(0.5)) ],
-            #Firing Transitions [ (Target(#Idle) AlwaysEdge Delay::from_secs_f32(0.4)) ],
+                Transitions [ Target(#Firing) AlwaysEdge Delay::from_secs_f32(0.5) ]
+            --
+            #Firing Transitions [ Target(#Idle) AlwaysEdge Delay::from_secs_f32(0.4) ]
         ]
     });
 }

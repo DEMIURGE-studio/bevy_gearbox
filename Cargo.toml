@@ -27,10 +27,10 @@ version = "0.10.0"
 [workspace.dependencies]
 bevy = { version = "0.20.1", default-features = false }
 # Internal crates: exact pins, released together with `cargo publish --workspace`.
-bevy_gearbox_core = { version = "=0.9.0", path = "crates/core" }
-bevy_gearbox_macros = { version = "=0.9.0", path = "crates/macros" }
-bevy_gearbox_macros_impl = { version = "=0.9.0", path = "crates/macros_impl" }
-bevy_gearbox_protocol = { version = "=0.9.0", path = "crates/protocol", default-features = false }
+bevy_gearbox_core = { version = "=0.10.0", path = "crates/core" }
+bevy_gearbox_macros = { version = "=0.10.0", path = "crates/macros" }
+bevy_gearbox_macros_impl = { version = "=0.10.0", path = "crates/macros_impl" }
+bevy_gearbox_protocol = { version = "=0.10.0", path = "crates/protocol", default-features = false }
 
 [dependencies]
 bevy = { workspace = true, features = ["bevy_state"] }

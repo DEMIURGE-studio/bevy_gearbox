@@ -74,7 +74,7 @@ fn substates_block_builds_tree_with_backrefs() {
     let root = world
         .spawn_scene(bsn! {
             StateMachine
-            Substates [ #Ready, #Invoking, #Cooldown ]
+            Substates [ #Ready -- #Invoking -- #Cooldown ]
         })
         .unwrap()
         .id();
@@ -100,8 +100,9 @@ fn name_refs_resolve_initial_state_and_transition_target() {
         .spawn_scene(bsn! {
             StateMachine InitialState(#Ready)
             Substates [
-                #Ready Transitions [ (Target(#Invoking) AlwaysEdge) ],
-                #Invoking,
+                #Ready Transitions [ Target(#Invoking) AlwaysEdge ]
+                --
+                #Invoking
             ]
         })
         .unwrap()
@@ -154,16 +155,19 @@ fn full_invoked_chart_single_scope() {
         .spawn_scene(bsn! {
             StateMachine InitialState(#Ready)
             Substates [
-                #Ready Transitions [ (Target(#Invoking) AlwaysEdge) ],
+                #Ready Transitions [ Target(#Invoking) AlwaysEdge ]
+                --
                 #Invoking InitialState(#Repeater)
-                          Transitions [ (Target(#Cooldown) AlwaysEdge) ]
+                          Transitions [ Target(#Cooldown) AlwaysEdge ]
                           Substates [
                     #Repeater InitialState(#Idle) Substates [
-                        #Idle Transitions [ (Target(#Fire) AlwaysEdge) ],
-                        #Fire Transitions [ (Target(#Repeater) AlwaysEdge) ],
-                    ],
-                ],
-                #Cooldown Transitions [ (Target(#Ready) AlwaysEdge) ],
+                        #Idle Transitions [ Target(#Fire) AlwaysEdge ]
+                        --
+                        #Fire Transitions [ Target(#Repeater) AlwaysEdge ]
+                    ]
+                ]
+                --
+                #Cooldown Transitions [ Target(#Ready) AlwaysEdge ]
             ]
         })
         .unwrap()
@@ -207,7 +211,7 @@ fn edge_kind_internal_lowers_bare() {
         .spawn_scene(bsn! {
             StateMachine
             Substates [
-                #Busy Transitions [ (Target(#Busy) AlwaysEdge EdgeKind::Internal) ],
+                #Busy Transitions [ Target(#Busy) AlwaysEdge EdgeKind::Internal ]
             ]
         })
         .unwrap()
@@ -237,9 +241,9 @@ fn cross_scope_reference_via_entity_template_param() {
     let root = world
         .spawn_scene(bsn! {
             StateMachine
-            Substates [ #Home, #Away ]
+            Substates [ #Home -- #Away ]
             // `#Home` is resolved in THIS scope and threaded into edge_to's scope.
-            Transitions [ edge_to(#Home) ]
+            Transitions [ @edge_to(#Home) ]
         })
         .unwrap()
         .id();
@@ -278,13 +282,17 @@ fn relationship_lists_keep_authored_order() {
         let root = world
             .spawn_scene(bsn! {
                 StateMachine
-                Substates [ #S1, #S2, #S3, #S4, #S5 ]
+                Substates [ #S1 -- #S2 -- #S3 -- #S4 -- #S5 ]
                 Transitions [
-                    (#T1 Target(#S1) AlwaysEdge),
-                    (#T2 Target(#S2) AlwaysEdge),
-                    (#T3 Target(#S3) AlwaysEdge),
-                    (#T4 Target(#S4) AlwaysEdge),
-                    (#T5 Target(#S5) AlwaysEdge),
+                    #T1 Target(#S1) AlwaysEdge
+                    --
+                    #T2 Target(#S2) AlwaysEdge
+                    --
+                    #T3 Target(#S3) AlwaysEdge
+                    --
+                    #T4 Target(#S4) AlwaysEdge
+                    --
+                    #T5 Target(#S5) AlwaysEdge
                 ]
             })
             .unwrap()

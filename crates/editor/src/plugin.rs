@@ -569,8 +569,8 @@ fn ui_system(
     mut docs: ResMut<Docs>,
 ) {
     if let Ok(ctx) = egui_ctx.ctx_mut() {
-        // Root `Ui` covering the viewport; `CentralPanel::show` (which built this
-        // itself) is deprecated in egui 0.34 in favour of `show_inside`.
+        // Root `Ui` covering the viewport; `CentralPanel::show` takes the
+        // parent `Ui` (egui 0.36 renamed `show_inside` to `show`).
         let mut root = egui::Ui::new(
             ctx.clone(),
             egui::Id::new((ctx.viewport_id(), "gearbox_editor_root")),
@@ -579,7 +579,7 @@ fn ui_system(
                 .max_rect(ctx.content_rect()),
         );
         root.set_clip_rect(ctx.content_rect());
-        egui::CentralPanel::default().show_inside(&mut root, |ui_egui| {
+        egui::CentralPanel::default().show(&mut root, |ui_egui| {
             crate::editor::shell::layout::draw(
                 ui_egui,
                 &mut store,

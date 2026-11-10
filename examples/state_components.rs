@@ -109,23 +109,27 @@ fn setup(mut commands: Commands) {
             Controllable
             StateMachine InitialState(#Standing)
             // On the root, so it applies from every state.
-            Transitions [ (Target(#Stunned) MessageEdge::<Stun>) ]
+            Transitions [ Target(#Stunned) MessageEdge::<Stun> ]
         Substates [
-            #Standing Transitions [ (Target(#Walking) MessageEdge::<Move>) ],
+            #Standing Transitions [ Target(#Walking) MessageEdge::<Move> ]
+            --
             #Walking
                 StateComponent::<Moving>
                 StateComponent::<Speed>(Speed(120.0))
                 Transitions [
-                    (Target(#Sprinting) MessageEdge::<Sprint>),
-                    (Target(#Standing)  MessageEdge::<Move>),
-                ],
+                    Target(#Sprinting) MessageEdge::<Sprint>
+                    --
+                    Target(#Standing)  MessageEdge::<Move>
+                ]
+            --
             #Sprinting
                 StateComponent::<Moving>
                 StateComponent::<Speed>(Speed(320.0))
-                Transitions [ (Target(#Standing) MessageEdge::<Move>) ],
+                Transitions [ Target(#Standing) MessageEdge::<Move> ]
+            --
             #Stunned
                 StateInactiveComponent::<Controllable>
-                Transitions [ (Target(#Standing) AlwaysEdge Delay::from_secs_f32(1.2)) ],
+                Transitions [ Target(#Standing) AlwaysEdge Delay::from_secs_f32(1.2) ]
         ]
     });
 }

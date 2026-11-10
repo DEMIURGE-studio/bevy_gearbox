@@ -20,8 +20,9 @@
 //!     commands.spawn_scene(bsn! {
 //!         StateMachine InitialState(#Ready)
 //!         Substates [
-//!             #Ready Transitions [ (Target(#Cooldown) MessageEdge::<Fire>) ],
-//!             #Cooldown Transitions [ (Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.8)) ],
+//!             #Ready Transitions [ Target(#Cooldown) MessageEdge::<Fire> ]
+//!             --
+//!             #Cooldown Transitions [ Target(#Ready) AlwaysEdge Delay::from_secs_f32(0.8) ]
 //!         ]
 //!     });
 //! }

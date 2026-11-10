@@ -1141,8 +1141,9 @@ mod tests {
                 StateMachine InitialState(#A)
                 Substates [
                     #A on(|_: On<EnterState>| {})
-                       Transitions [ (Target(#B) AlwaysEdge Delay::from_secs_f32(1.0) Unreflected) ],
-                    #B,
+                       Transitions [ Target(#B) AlwaysEdge Delay::from_secs_f32(1.0) Unreflected ]
+                    --
+                    #B
                 ]
             })
             .unwrap()
@@ -1209,11 +1210,14 @@ mod tests {
                 StateMachine InitialState(#Idle)
                 Substates [
                     #Idle Transitions [
-                        (#First  Target(#A) AlwaysEdge),
-                        (#Second Target(#B) AlwaysEdge),
-                        (#Third  Target(#C) AlwaysEdge),
-                    ],
-                    #A, #B, #C,
+                        #First  Target(#A) AlwaysEdge
+                        --
+                        #Second Target(#B) AlwaysEdge
+                        --
+                        #Third  Target(#C) AlwaysEdge
+                    ]
+                    --
+                    #A -- #B -- #C
                 ]
             })
             .unwrap()

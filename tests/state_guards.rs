@@ -53,13 +53,16 @@ fn in_state_guard_requires_the_named_state_to_be_active() {
         StateMachine
         Substates [
             #Posture InitialState(#Standing) Substates [
-                #Standing Transitions [ (Target(#Crouching) MessageEdge::<Crouch>) ],
-                #Crouching,
-            ],
+                #Standing Transitions [ Target(#Crouching) MessageEdge::<Crouch> ]
+                --
+                #Crouching
+            ]
+            --
             #Weapon InitialState(#Holstered) Substates [
-                #Holstered Transitions [ (Target(#Drawn) MessageEdge::<Draw> InState(#Standing)) ],
-                #Drawn,
-            ],
+                #Holstered Transitions [ Target(#Drawn) MessageEdge::<Draw> InState(#Standing) ]
+                --
+                #Drawn
+            ]
         ]
     });
     app.update();
@@ -74,13 +77,16 @@ fn in_state_guard_requires_the_named_state_to_be_active() {
         StateMachine
         Substates [
             #Posture InitialState(#Standing) Substates [
-                #Standing Transitions [ (Target(#Crouching) MessageEdge::<Crouch>) ],
-                #Crouching,
-            ],
+                #Standing Transitions [ Target(#Crouching) MessageEdge::<Crouch> ]
+                --
+                #Crouching
+            ]
+            --
             #Weapon InitialState(#Holstered) Substates [
-                #Holstered Transitions [ (Target(#Drawn) MessageEdge::<Draw> InState(#Standing)) ],
-                #Drawn,
-            ],
+                #Holstered Transitions [ Target(#Drawn) MessageEdge::<Draw> InState(#Standing) ]
+                --
+                #Drawn
+            ]
         ]
     });
     app.update();
@@ -97,17 +103,22 @@ fn not_in_state_guard_and_fallthrough() {
         StateMachine
         Substates [
             #Posture InitialState(#Standing) Substates [
-                #Standing Transitions [ (Target(#Crouching) MessageEdge::<Crouch>) ],
-                #Crouching,
-            ],
+                #Standing Transitions [ Target(#Crouching) MessageEdge::<Crouch> ]
+                --
+                #Crouching
+            ]
+            --
             #Weapon InitialState(#Holstered) Substates [
                 #Holstered Transitions [
-                    (Target(#Drawn) MessageEdge::<Draw> NotInState(#Crouching)),
-                    (Target(#Fumbled) MessageEdge::<Draw>),
-                ],
-                #Drawn,
-                #Fumbled,
-            ],
+                    Target(#Drawn) MessageEdge::<Draw> NotInState(#Crouching)
+                    --
+                    Target(#Fumbled) MessageEdge::<Draw>
+                ]
+                --
+                #Drawn
+                --
+                #Fumbled
+            ]
         ]
     });
     app.update();

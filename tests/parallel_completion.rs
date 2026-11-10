@@ -64,18 +64,22 @@ fn parallel_state_completes_only_when_every_region_is_done() {
         StateMachine InitialState(#Fight)
         Substates [
             #Fight
-                Transitions [ (Target(#Over) MessageEdge::<Done>) ]
+                Transitions [ Target(#Over) MessageEdge::<Done> ]
                 Substates [
                     #Posture InitialState(#Standing) Substates [
-                        #Standing Transitions [ (Target(#Down) MessageEdge::<Knock>) ],
-                        #Down TerminalState,
-                    ],
+                        #Standing Transitions [ Target(#Down) MessageEdge::<Knock> ]
+                        --
+                        #Down TerminalState
+                    ]
+                    --
                     #Weapon InitialState(#Armed) Substates [
-                        #Armed Transitions [ (Target(#Dropped) MessageEdge::<Drop>) ],
-                        #Dropped TerminalState,
-                    ],
-                ],
-            #Over,
+                        #Armed Transitions [ Target(#Dropped) MessageEdge::<Drop> ]
+                        --
+                        #Dropped TerminalState
+                    ]
+                ]
+            --
+            #Over
         ]
     });
     app.update();
@@ -110,23 +114,28 @@ fn nested_parallel_completion_cascades_upward() {
         StateMachine InitialState(#Outer)
         Substates [
             #Outer
-                Transitions [ (Target(#Over) MessageEdge::<Done>) ]
+                Transitions [ Target(#Over) MessageEdge::<Done> ]
                 Substates [
                     #Inner Substates [
                         #Posture InitialState(#Standing) Substates [
-                            #Standing Transitions [ (Target(#Down) MessageEdge::<Knock>) ],
-                            #Down TerminalState,
-                        ],
+                            #Standing Transitions [ Target(#Down) MessageEdge::<Knock> ]
+                            --
+                            #Down TerminalState
+                        ]
+                        --
                         #Weapon InitialState(#Armed) Substates [
-                            #Armed Transitions [ (Target(#Dropped) MessageEdge::<Drop>) ],
-                            #Dropped TerminalState,
-                        ],
-                    ],
+                            #Armed Transitions [ Target(#Dropped) MessageEdge::<Drop> ]
+                            --
+                            #Dropped TerminalState
+                        ]
+                    ]
+                    --
                     #Side InitialState(#Finished) Substates [
-                        #Finished TerminalState,
-                    ],
-                ],
-            #Over,
+                        #Finished TerminalState
+                    ]
+                ]
+            --
+            #Over
         ]
     });
     app.update();
@@ -156,23 +165,28 @@ fn completed_parallel_does_not_complete_a_sequential_parent() {
         Substates [
             #Round
                 InitialState(#Fight)
-                Transitions [ (Target(#Over) MessageEdge::<Done>) ]
+                Transitions [ Target(#Over) MessageEdge::<Done> ]
                 Substates [
                     #Fight
-                        Transitions [ (Target(#Rest) MessageEdge::<Done>) ]
+                        Transitions [ Target(#Rest) MessageEdge::<Done> ]
                         Substates [
                             #Posture InitialState(#Standing) Substates [
-                                #Standing Transitions [ (Target(#Down) MessageEdge::<Knock>) ],
-                                #Down TerminalState,
-                            ],
+                                #Standing Transitions [ Target(#Down) MessageEdge::<Knock> ]
+                                --
+                                #Down TerminalState
+                            ]
+                            --
                             #Weapon InitialState(#Armed) Substates [
-                                #Armed Transitions [ (Target(#Dropped) MessageEdge::<Drop>) ],
-                                #Dropped TerminalState,
-                            ],
-                        ],
-                    #Rest,
-                ],
-            #Over,
+                                #Armed Transitions [ Target(#Dropped) MessageEdge::<Drop> ]
+                                --
+                                #Dropped TerminalState
+                            ]
+                        ]
+                    --
+                    #Rest
+                ]
+            --
+            #Over
         ]
     });
     app.update();

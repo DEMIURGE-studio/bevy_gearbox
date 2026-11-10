@@ -46,13 +46,15 @@ fn spawn_character(mut commands: Commands) {
         Substates [
             #Alive InitialState(#Standing) Substates [
                 #Standing Transitions [
-                    (Target(#Jumping) MessageEdge::<Jump>)
-                ],
+                    Target(#Jumping) MessageEdge::<Jump>
+                ]
+                --
                 #Jumping Transitions [
-                    (Target(#Standing) MessageEdge::<Land>)
-                ],
-            ],
-            #Dead,
+                    Target(#Standing) MessageEdge::<Land>
+                ]
+            ]
+            --
+            #Dead
         ]
     });
 }

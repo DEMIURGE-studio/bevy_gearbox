@@ -12,7 +12,7 @@ categories = ["game-development", "game-engines"]
 [dependencies]
 bevy = { workspace = true, features = ["bevy_state", "bevy_log", "bevy_scene", "bevy_asset"] }
 inventory = "0.3"
-bevy_gauge = { version = "0.5", optional = true }
+bevy_gauge = { version = "0.6", optional = true }
 
 [dev-dependencies]
 bevy = { workspace = true, features = ["bevy_scene", "bevy_asset"] }

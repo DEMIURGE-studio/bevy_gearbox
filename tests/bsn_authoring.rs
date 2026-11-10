@@ -72,9 +72,10 @@ fn state_components_lower_in_bsn() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Idle)
         Substates [
-            #Idle StateInactiveComponent::<CanMove> Transitions [ (Target(#Run) MessageEdge::<Go>) ],
+            #Idle StateInactiveComponent::<CanMove> Transitions [ Target(#Run) MessageEdge::<Go> ]
+            --
             #Run StateComponent::<Walking> StateComponent::<Speed>(Speed(7.5))
-                 Transitions [ (Target(#Idle) MessageEdge::<Back>) ],
+                 Transitions [ Target(#Idle) MessageEdge::<Back> ]
         ]
     });
     app.update();
@@ -100,12 +101,14 @@ fn history_lowers_and_restores() {
         StateMachine InitialState(#Menu)
         Substates [
             #Menu History::Shallow InitialState(#Main)
-                Transitions [ (Target(#Game) MessageEdge::<Go>) ]
+                Transitions [ Target(#Game) MessageEdge::<Go> ]
                 Substates [
-                    #Main Transitions [ (Target(#Options) MessageEdge::<Back>) ],
-                    #Options,
-                ],
-            #Game Transitions [ (Target(#Menu) MessageEdge::<Back>) ],
+                    #Main Transitions [ Target(#Options) MessageEdge::<Back> ]
+                    --
+                    #Options
+                ]
+            --
+            #Game Transitions [ Target(#Menu) MessageEdge::<Back> ]
         ]
     });
     app.update();
@@ -128,12 +131,14 @@ fn reset_edge_lowers_and_clears_history() {
         StateMachine InitialState(#Menu)
         Substates [
             #Menu History::Shallow InitialState(#Main)
-                Transitions [ (Target(#Game) MessageEdge::<Go>) ]
+                Transitions [ Target(#Game) MessageEdge::<Go> ]
                 Substates [
-                    #Main Transitions [ (Target(#Options) MessageEdge::<Back>) ],
-                    #Options,
-                ],
-            #Game Transitions [ (Target(#Menu) MessageEdge::<Back> ResetEdge(ResetScope::Target)) ],
+                    #Main Transitions [ Target(#Options) MessageEdge::<Back> ]
+                    --
+                    #Options
+                ]
+            --
+            #Game Transitions [ Target(#Menu) MessageEdge::<Back> ResetEdge(ResetScope::Target) ]
         ]
     });
     app.update();
@@ -152,12 +157,14 @@ fn terminal_state_and_done_lower() {
         StateMachine InitialState(#Work)
         Substates [
             #Work InitialState(#Step)
-                Transitions [ (Target(#Finished) MessageEdge::<Done>) ]
+                Transitions [ Target(#Finished) MessageEdge::<Done> ]
                 Substates [
-                    #Step Transitions [ (Target(#End) MessageEdge::<Go>) ],
-                    #End TerminalState,
-                ],
-            #Finished,
+                    #Step Transitions [ Target(#End) MessageEdge::<Go> ]
+                    --
+                    #End TerminalState
+                ]
+            --
+            #Finished
         ]
     });
     app.update();
@@ -173,8 +180,9 @@ fn delayed_message_edge_lowers() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Idle)
         Substates [
-            #Idle Transitions [ (Target(#Run) MessageEdge::<Go> Delay::from_secs_f32(0.1)) ],
-            #Run,
+            #Idle Transitions [ Target(#Run) MessageEdge::<Go> Delay::from_secs_f32(0.1) ]
+            --
+            #Run
         ]
     });
     app.update();
@@ -195,9 +203,11 @@ fn parallel_root_explicit_source_and_machine_id_lower() {
         StateMachineId("character")
         StateMachine
         Substates [
-            #Posture InitialState(#Standing) Substates [ #Standing, #Crouching ],
-            #Weapon InitialState(#Holstered) Substates [ #Holstered, #Drawn ],
-            (Source(#Standing) Target(#Crouching) MessageEdge::<Go>),
+            #Posture InitialState(#Standing) Substates [ #Standing -- #Crouching ]
+            --
+            #Weapon InitialState(#Holstered) Substates [ #Holstered -- #Drawn ]
+            --
+            Source(#Standing) Target(#Crouching) MessageEdge::<Go>
         ]
     });
     app.update();
@@ -222,8 +232,9 @@ fn enter_state_observer_lowers() {
     app.world_mut().commands().spawn_scene(bsn! {
         StateMachine InitialState(#Idle)
         Substates [
-            #Idle Transitions [ (Target(#Run) MessageEdge::<Go>) ],
-            #Run on(|_: On<EnterState>, mut entered: ResMut<Entered>| { entered.0 += 1; }),
+            #Idle Transitions [ Target(#Run) MessageEdge::<Go> ]
+            --
+            #Run on(|_: On<EnterState>, mut entered: ResMut<Entered>| { entered.0 += 1; })
         ]
     });
     app.update();

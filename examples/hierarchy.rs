@@ -101,20 +101,23 @@ fn setup(mut commands: Commands) {
         Substates [
             // `Damage` is handled here, once, for Idle, Walking and Airborne alike.
             #Alive InitialState(#Grounded)
-                Transitions [ (Target(#Dead) MessageEdge::<Damage>) ]
+                Transitions [ Target(#Dead) MessageEdge::<Damage> ]
                 Substates [
                     #Grounded InitialState(#Idle)
-                        Transitions [ (Target(#Airborne) MessageEdge::<Jump>) ]
+                        Transitions [ Target(#Airborne) MessageEdge::<Jump> ]
                         Substates [
-                            #Idle    Transitions [ (Target(#Walking) MessageEdge::<Walk>) ],
-                            #Walking Transitions [ (Target(#Idle)    MessageEdge::<Walk>) ],
-                        ],
+                            #Idle    Transitions [ Target(#Walking) MessageEdge::<Walk> ]
+                            --
+                            #Walking Transitions [ Target(#Idle)    MessageEdge::<Walk> ]
+                        ]
+                    --
                     #Airborne Transitions [
-                        (Target(#Grounded) AlwaysEdge Delay::from_secs_f32(0.6))
-                    ],
-                ],
+                        Target(#Grounded) AlwaysEdge Delay::from_secs_f32(0.6)
+                    ]
+                ]
+            --
             // Back to the sibling; Alive's InitialState chain picks Grounded, then Idle.
-            #Dead Transitions [ (Target(#Alive) MessageEdge::<Respawn>) ],
+            #Dead Transitions [ Target(#Alive) MessageEdge::<Respawn> ]
         ]
     });
 }

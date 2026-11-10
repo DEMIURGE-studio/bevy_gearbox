@@ -96,20 +96,23 @@ fn setup(mut commands: Commands) {
             #Posture InitialState(#Standing) Substates [
                 #Standing
                     on(label::<PostureText>("Posture: Standing"))
-                    Transitions [ (Target(#Crouching) MessageEdge::<Crouch>) ],
+                    Transitions [ Target(#Crouching) MessageEdge::<Crouch> ]
+                --
                 #Crouching
                     on(label::<PostureText>("Posture: Crouching"))
-                    Transitions [ (Target(#Standing) MessageEdge::<Stand>) ],
-            ],
+                    Transitions [ Target(#Standing) MessageEdge::<Stand> ]
+            ]
+            --
             #Weapon InitialState(#Holstered) Substates [
                 #Holstered
                     on(label::<WeaponText>("Weapon: Holstered"))
                     // A built-in guard: taken only while the posture region is in Standing.
-                    Transitions [ (Target(#Drawn) MessageEdge::<Draw> InState(#Standing)) ],
+                    Transitions [ Target(#Drawn) MessageEdge::<Draw> InState(#Standing) ]
+                --
                 #Drawn
                     on(label::<WeaponText>("Weapon: Drawn"))
-                    Transitions [ (Target(#Holstered) MessageEdge::<Holster> InState(#Standing)) ],
-            ],
+                    Transitions [ Target(#Holstered) MessageEdge::<Holster> InState(#Standing) ]
+            ]
         ]
     });
 }

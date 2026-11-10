@@ -95,25 +95,31 @@ fn setup(mut commands: Commands) {
             // No InitialState: a parallel state. Its Done fires when every
             // region is in a terminal state.
             #Gather
-                Transitions [ (Target(#Build) MessageEdge::<Done>) ]
+                Transitions [ Target(#Build) MessageEdge::<Done> ]
                 Substates [
                     #Wood InitialState(#Chopping) Substates [
-                        #Chopping Transitions [ (Target(#WoodReady) MessageEdge::<Chop>) ],
-                        #WoodReady TerminalState,
-                    ],
+                        #Chopping Transitions [ Target(#WoodReady) MessageEdge::<Chop> ]
+                        --
+                        #WoodReady TerminalState
+                    ]
+                    --
                     #Stone InitialState(#Mining) Substates [
-                        #Mining Transitions [ (Target(#StoneReady) MessageEdge::<Mine>) ],
-                        #StoneReady TerminalState,
-                    ],
-                ],
+                        #Mining Transitions [ Target(#StoneReady) MessageEdge::<Mine> ]
+                        --
+                        #StoneReady TerminalState
+                    ]
+                ]
+            --
             // A sequential sub-chart: Done when its terminal child is entered.
             #Build InitialState(#Hammering)
-                Transitions [ (Target(#Complete) MessageEdge::<Done>) ]
+                Transitions [ Target(#Complete) MessageEdge::<Done> ]
                 Substates [
-                    #Hammering Transitions [ (Target(#Built) AlwaysEdge Delay::from_secs_f32(1.5)) ],
-                    #Built TerminalState,
-                ],
-            #Complete,
+                    #Hammering Transitions [ Target(#Built) AlwaysEdge Delay::from_secs_f32(1.5) ]
+                    --
+                    #Built TerminalState
+                ]
+            --
+            #Complete
         ]
     });
 }

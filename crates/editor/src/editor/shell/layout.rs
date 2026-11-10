@@ -50,18 +50,16 @@ pub fn draw(ui: &mut egui::Ui, store: &mut EditorStore, commands: &mut Commands,
                 });
 
                 // Board-level zoom: apply wheel zoom to all documents once per frame and persist to workspace.board_transform
+                // Wheel up zooms in, wheel down zooms out.
                 let scroll_y = ui.ctx().input(|i| i.smooth_scroll_delta.y);
                 if scroll_y != 0.0 && !ui.ctx().egui_wants_pointer_input() {
-                    let scroll: f32 = scroll_y;
-                    if scroll.abs() > 0.0 {
-                        let factor = 1.0 + (-scroll * 0.001);
-                        let cursor = ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(board_rect.center());
-                        let cursor = cursor.clamp(board_rect.min, board_rect.max);
-                        for (_id, doc) in docs.map.iter_mut() {
-                            doc.transform.zoom_around_screen_point(factor, cursor);
-                        }
-                        workspace.board_transform.zoom_around_screen_point(factor, cursor);
+                    let factor = 1.0 + scroll_y * 0.001;
+                    let cursor = ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(board_rect.center());
+                    let cursor = cursor.clamp(board_rect.min, board_rect.max);
+                    for (_id, doc) in docs.map.iter_mut() {
+                        doc.transform.zoom_around_screen_point(factor, cursor);
                     }
+                    workspace.board_transform.zoom_around_screen_point(factor, cursor);
                 }
 
                 // Board-level background drag pan: apply once per frame to all documents

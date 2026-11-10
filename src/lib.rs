@@ -79,4 +79,8 @@ pub mod core {
 #[cfg(feature = "server")]
 pub mod server {
     pub use bevy_gearbox_protocol::server::*;
+    /// Entity events a game can trigger to drive a connected editor, e.g.
+    /// `commands.trigger(events::OpenOnClient { target: machine })` to open a
+    /// chart on the editor's canvas.
+    pub use bevy_gearbox_protocol::events;
 }
